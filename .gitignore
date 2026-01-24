@@ -1,0 +1,25 @@
+# ROS2 Build artifacts
+build/
+install/
+log/
+
+# External dependencies (managed by .repos files)
+src/franka_ros2/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
