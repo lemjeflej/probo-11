@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>controleurs</name>
+  <version>0.0.1</version>
+  <description>Les controleurs du projet PROBO n° 11 de l'ecole Centrale</description>
+
+  <maintainer email="hhamzi.in@gmail.com">Hamza</maintainer>
+  <license>Apache-2.0</license>
+  <author>Hamza Haytoumi</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

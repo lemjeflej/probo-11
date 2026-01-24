@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="fr3_sur_rail">
+
+  <!-- ===================== -->
+  <!-- Includes -->
+  <!-- ===================== -->
+  <xacro:include filename="$(find franka_description)/robots/common/franka_robot.xacro"/>
+  <xacro:include filename="$(find franka_sonde)/urdf/rail_sur_table.xacro"/>
+
+  <!-- ===================== -->
+  <!-- Robot -->
+  <!-- ===================== -->
+  <xacro:franka_robot
+    arm_id="fr3"
+    xyz="0 0 0"
+    rpy="0 0 0"
+    joint_limits="${xacro.load_yaml('$(find franka_description)/robots/fr3/joint_limits.yaml')}"
+    inertials="${xacro.load_yaml('$(find franka_description)/robots/fr3/inertials.yaml')}"
+    kinematics="${xacro.load_yaml('$(find franka_description)/robots/fr3/kinematics.yaml')}"
+    accelerometer_config="${xacro.load_yaml('$(find franka_description)/robots/fr3/accelerometers.yaml')}"
+    dynamics="${xacro.load_yaml('$(find franka_description)/robots/fr3/dynamics.yaml')}"
+  />
+
+  <!-- ===================== -->
+  <!-- Attacher le robot au montage -->
+  <!-- ===================== -->
+  <joint name="montage_to_base" type="fixed">
+    <origin xyz="0 0 1.04" rpy="0 0 0"/>
+    <parent link="montage"/>
+    <child link="base"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>

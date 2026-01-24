@@ -5,6 +5,8 @@ log/
 
 # External dependencies (managed by .repos files)
 src/franka_ros2/
+src/franka_description/
+src/libfranka/
 
 # Python
 __pycache__/
