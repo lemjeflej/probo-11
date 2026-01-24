@@ -4,9 +4,7 @@ from launch.substitutions import Command, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
 
-
 def generate_launch_description():
-
     robot_description = ParameterValue(
         Command([
             "xacro ",
@@ -18,10 +16,9 @@ def generate_launch_description():
         ]),
         value_type=str
     )
-
+    
     return LaunchDescription([
-
-        # Publie TF à partir de l’URDF
+        # Robot state publisher
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -31,23 +28,28 @@ def generate_launch_description():
             output="screen"
         ),
 
-        # UNE SEULE source de /joint_states (rail_joint)
+        # Lancer le noeud de test
+        # Node(
+        #     package="controleurs",
+        #     executable="test_node",
+        #     output="screen"
+        # ),
+        
+        # Lancer le noeud de position initiale
         Node(
             package="controleurs",
-            executable="controleur_rail",
-            output="screen",
-            parameters=[{"amp":0.20,"center":0.50,"freq":0.10,"rate":50.0}],
-            ),
-
-
-        # Visualisation
+            executable="initial_pose_controller",
+            output="screen"
+        ),
+        
+        # RViz
         Node(
             package="rviz2",
             executable="rviz2",
             arguments=["-d", PathJoinSubstitution([
-            FindPackageShare("franka_sonde"),
-            "rviz",
-            "fr3_sur_rail.rviz"
+                FindPackageShare("franka_sonde"),
+                "rviz",
+                "fr3_sur_rail.rviz"
             ])],
             output="screen"
         )
