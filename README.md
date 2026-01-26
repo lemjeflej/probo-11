@@ -26,8 +26,8 @@ probo-11/
 ### 1. Cloner le dépôt
 
 ```bash
-cd ~/robotics
-git clone <https://github.com/lemjeflej/probo-11/tree/master> probo-11
+cd ~/là ou tu veux mettre le workspace
+git clone <https://github.com/lemjeflej/probo-11.git> probo-11
 cd probo-11
 ```
 
@@ -102,7 +102,7 @@ Vous devriez voir une liste de packages `franka_*`.
 
 ## Utilisation
 
-### Lancer la simulation
+### Lancer la simulation (encore en développement)
 
 ```bash
 ros2 launch franka_sonde project.launch.py
