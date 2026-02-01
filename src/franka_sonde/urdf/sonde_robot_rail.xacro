@@ -36,12 +36,37 @@
   </joint>
 
   <!-- TCP de l'outil -->
-  <link name="tool_tcp"/>
+  <link name="sonde_tcp"/>
 
   <joint name="sonde_tcp_joint" type="fixed">
     <parent link="base-sonde"/>
-    <child link="tool_tcp"/>
+    <child link="sonde_tcp"/>
     <origin xyz="0 0 -0.2" rpy="3.14159265359 0 0"/>  <!-- Position du bout de l'outil -->
   </joint>
+
+  <!-- ========================================= -->
+  <!-- ROS2_CONTROL : Ajouter le rail            -->
+  <!-- ========================================= -->
+  
+  <ros2_control name="RailController" type="system">
+    <hardware>
+      <!-- Pour simulation -->
+      <plugin>mock_components/GenericSystem</plugin>
+      <param name="mock_sensor_commands">false</param>
+      <param name="state_following_offset">0.0</param>
+    </hardware>
+    
+    <!-- Joint du rail -->
+    <joint name="rail_joint">
+      <command_interface name="position">
+        <param name="min">0.0</param>
+        <param name="max">2.0</param>
+      </command_interface>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>  <!-- Position initiale -->
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
 
 </robot>
