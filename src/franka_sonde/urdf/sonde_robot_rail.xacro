@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="robot_complet">
+
+  <!-- ===================== -->
+  <!-- Includes -->
+  <!-- ===================== -->
+  <xacro:include filename="$(find franka_sonde)/urdf/fr3_sur_rail.xacro"/>
+
+  <!-- ===================== -->
+  <!-- Rajouter la sonde -->
+  <!-- ===================== -->
+
+ 
+  <link name="base-sonde">
+    <visual>
+      <geometry>
+        <mesh filename="package://franka_sonde/meshes/sonde.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://franka_sonde/meshes/sonde.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.3"/>  <!-- à modifier-->
+      <inertia ixx="0.001" iyy="0.001" izz="0.001"  
+              ixy="0" ixz="0" iyz="0"/>  <!-- à modifier-->
+    </inertial>
+  </link>
+
+  <joint name="montage-sonde" type="fixed">
+    <parent link="fr3_link8"/> 
+    <child link="base-sonde"/>
+    <origin xyz="0 0 0" rpy="3.14159265359 0 0"/>  <!-- à verifier -->
+  </joint>
+
+  <!-- TCP de l'outil -->
+  <link name="tool_tcp"/>
+
+  <joint name="sonde_tcp_joint" type="fixed">
+    <parent link="base-sonde"/>
+    <child link="tool_tcp"/>
+    <origin xyz="0 0 -0.2" rpy="3.14159265359 0 0"/>  <!-- Position du bout de l'outil -->
+  </joint>
+
+</robot>

@@ -13,7 +13,7 @@ def generate_launch_description():
             PathJoinSubstitution([
                 FindPackageShare("franka_sonde"), 
                 "urdf",
-                "fr3_sur_rail.xacro"
+                "sonde_robot_rail.xacro"
             ])
         ]),
         value_type=str
@@ -45,7 +45,7 @@ def generate_launch_description():
             arguments=["-d", PathJoinSubstitution([
             FindPackageShare("franka_sonde"),
             "rviz",
-            "fr3_sur_rail.rviz"
+            "robot_complet.rviz"
             ])],
             output="screen"
         )

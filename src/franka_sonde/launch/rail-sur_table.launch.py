@@ -10,7 +10,7 @@ def generate_launch_description():
         Command([
             "cat ",
             PathJoinSubstitution([
-                FindPackageShare("franka_11_description"),
+                FindPackageShare("franka_sonde"),
                 "urdf",
                 "rail_sur_table.xacro"
             ])
@@ -38,7 +38,7 @@ def generate_launch_description():
             package="rviz2",
             executable="rviz2",
             arguments=["-d", PathJoinSubstitution([
-            FindPackageShare("franka_11_description"),
+            FindPackageShare("franka_sonde"),
             "rviz",
             "trm.rviz"
             ])],
