@@ -1,0 +1,142 @@
+<?xml version="1.0"?>
+<!--
+  srr.xacro  —  Sonde + Robot + Rail  (version Gazebo)
+  =======================================================
+  Entrée : rail_sur_table.xacro  (table + rail + montage)
+           franka_robot.xacro    (bras FR3)
+  Sortie : modèle complet prêt pour ros_gz_sim
+
+  Différences par rapport à l'ancien sonde_robot_rail.xacro
+  =========================================================
+  1. franka_robot appelé avec gazebo=true et ros2_control=true
+     → plugin franka_ign_ros2_control/IgnitionSystem activé
+     → interfaces position/velocity/effort exposées à ros2_control
+  2. parent='' dans franka_robot → pas de world_joint Franka
+     On crée nous-mêmes le joint world→table pour fixer l'assemblage
+  3. En mode gazebo, franka_arm ne crée PAS de link "base" :
+     on rattache montage directement à fr3_link0
+  4. Sonde : un seul flip (rpy π 0 0) pour orienter l'outil vers le bas
+     TCP à +z (après flip, +z sonde = -z link8 = vers le bas)
+  5. Rail : mock_components/GenericSystem (rail fixe pour l'instant)
+     Acceptable tant qu'on ignore la position du rail
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fr3">
+
+  <!-- =============================================
+       INCLUDES
+  ============================================= -->
+  <xacro:include filename="$(find franka_description)/robots/common/franka_robot.xacro"/>
+  <xacro:include filename="$(find franka_sonde)/urdf/rail_sur_table.xacro"/>
+
+  <!-- =============================================
+       ARGUMENTS (passés depuis le launch file)
+  ============================================= -->
+  <xacro:arg name="robot_type"      default="fr3"/>
+  <xacro:arg name="hand"            default="false"/>
+  <xacro:arg name="ee_id"           default="none"/>
+  <xacro:arg name="gazebo_effort"   default="false"/>
+  <!-- fixed : la chaîne KDL n'a que 7 joints mobiles (FR3)
+       → JntToGravity reçoit un vecteur de taille 7 = OK
+       prismatic ajouterait un 8e joint → taille mismatch → ERROR -->
+  <xacro:arg name="rail_joint_type" default="fixed"/>
+
+  <!-- =============================================
+       BRAS FR3
+       gazebo=true   → plugin IgnitionSystem + transmissions
+       ros2_control=true → bloc <ros2_control> inclus
+       parent=''     → on ne crée PAS de joint world→link0 ici
+                        (on le gère via world→table ci-dessous)
+  ============================================= -->
+  <xacro:franka_robot
+    robot_type="$(arg robot_type)"
+    xyz="0 0 0"
+    rpy="0 0 0"
+    parent=""
+    hand="$(arg hand)"
+    ee_id="$(arg ee_id)"
+    gazebo="true"
+    ros2_control="true"
+    gazebo_effort="$(arg gazebo_effort)"
+    joint_limits="${xacro.load_yaml('$(find franka_description)/robots/fr3/joint_limits.yaml')}"
+    inertials="${xacro.load_yaml('$(find franka_description)/robots/fr3/inertials.yaml')}"
+    kinematics="${xacro.load_yaml('$(find franka_description)/robots/fr3/kinematics.yaml')}"
+    accelerometer_config="${xacro.load_yaml('$(find franka_description)/robots/fr3/accelerometers.yaml')}"
+    dynamics="${xacro.load_yaml('$(find franka_description)/robots/fr3/dynamics.yaml')}"
+  />
+
+  <!-- =============================================
+       ANCRAGE MONDE → TABLE
+       Gazebo a besoin d'un lien nommé "world" comme racine
+       pour qu'un modèle soit fixe dans la simulation.
+  ============================================= -->
+  <link name="world"/>
+  <joint name="world_to_table" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child  link="table"/>
+  </joint>
+
+  <!-- =============================================
+       MONTAGE → BRAS
+       Avec gazebo=true dans franka_arm, le link "base" n'est
+       PAS créé (connected_to est mis à vide).
+       On attache directement montage à fr3_link0.
+       L'offset z=1.04 m correspond à :
+         table (1 m) + rail (0.02 m) + carriage (0.02 m) ≈ 1.04 m
+  ============================================= -->
+  <joint name="montage_to_arm" type="fixed">
+    <origin xyz="0 0 1.04" rpy="0 0 0"/>
+    <parent link="montage"/>
+    <child  link="fr3_link0"/>
+  </joint>
+
+  <!-- =============================================
+       SONDE
+       Orientation : un seul flip de 180° autour de X
+         → l'axe +Z de sonde_base pointe dans la même direction
+           que l'axe -Z de fr3_link8  (vers le bas quand bras vertical)
+       TCP : 20 cm le long de l'axe +Z de sonde_base
+         → bout de la sonde, 20 cm sous fr3_link8
+       NOTE : l'orientation exacte dépend du modèle CAO (sonde.dae).
+              Vérifier visuellement dans RViz/Gazebo.
+  ============================================= -->
+  <link name="sonde_base">
+    <visual>
+      <geometry>
+        <mesh filename="package://franka_sonde/meshes/sonde.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://franka_sonde/meshes/sonde.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.3"/>
+      <!-- Valeurs approximatives — à affiner si le robot oscille -->
+      <inertia ixx="0.001" iyy="0.001" izz="0.0005"
+               ixy="0.0"   ixz="0.0"   iyz="0.0"/>
+    </inertial>
+  </link>
+
+  <joint name="sonde_joint" type="fixed">
+    <parent link="fr3_link8"/>
+    <child  link="sonde_base"/>
+    <origin xyz="0 0 0" rpy="3.14159265359 0 0"/>
+  </joint>
+
+  <!-- Point de contrôle de l'outil (TCP) -->
+  <link name="sonde_tcp"/>
+  <joint name="sonde_tcp_joint" type="fixed">
+    <parent link="sonde_base"/>
+    <child  link="sonde_tcp"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+  </joint>
+
+  <!-- RailSystem supprimé :
+       mock_components/GenericSystem est incompatible avec
+       franka_ign_ros2_control/IgnitionSystem (base class différente).
+       Le rail_joint est laissé sans interface ros2_control pour l'instant.
+       Son état est fourni par joint_state_publisher dans le launch file. -->
+
+</robot>

@@ -1,0 +1,84 @@
+# controllers.yaml
+# =================
+# Interface EFFORT obligatoire avec franka_ign_ros2_control/IgnitionSystem.
+# (le plugin a un bug avec les interfaces position/velocity en Gazebo)
+#
+# Le JointTrajectoryController en mode effort utilise des gains PD pour
+# générer les couples nécessaires à suivre la trajectoire et tenir la
+# position finale contre la gravité.
+
+controller_manager:
+  ros__parameters:
+    update_rate: 1000  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    fr3_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    rail_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+
+# ================================================================
+# fr3_arm_controller
+# Interface : EFFORT + gains PD
+#   state = position + velocity  (lus depuis Gazebo)
+#   command = effort             (couples envoyés à Gazebo)
+#
+# Les gains sont du type PD : tau = Kp*(q_ref - q) + Kd*(dq_ref - dq)
+# Joints proches de la base (1-4) : grands Kp/Kd (bras lourd)
+# Joints du poignet (5-7)         : gains plus faibles (bras léger)
+# ================================================================
+fr3_arm_controller:
+  ros__parameters:
+    joints:
+      - fr3_joint1
+      - fr3_joint2
+      - fr3_joint3
+      - fr3_joint4
+      - fr3_joint5
+      - fr3_joint6
+      - fr3_joint7
+
+    command_interfaces:
+      - effort
+
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    open_loop_control: false  # doit lire l'état réel pour le PD
+
+    gains:
+      fr3_joint1: { p: 600.0,  d: 30.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint2: { p: 600.0,  d: 30.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint3: { p: 600.0,  d: 30.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint4: { p: 600.0,  d: 30.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint5: { p: 250.0,  d: 10.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint6: { p: 150.0,  d: 10.0, i: 0.0, i_clamp: 1.0 }
+      fr3_joint7: { p:  50.0,  d:  5.0, i: 0.0, i_clamp: 1.0 }
+
+
+# ================================================================
+# rail_controller  (mock — rail fixe)
+# ================================================================
+rail_controller:
+  ros__parameters:
+    joints:
+      - rail_joint
+
+    command_interfaces:
+      - position        # mock_components accepte position directement
+
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 50.0
+    action_monitor_rate: 10.0
+    open_loop_control: true

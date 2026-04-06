@@ -1,7 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="table_rail_montage">
 
-  <!-- Table -->
+  <!-- rail_joint_type : "fixed" pour Gazebo (7 DOF → gravity comp OK)
+                         "prismatic" pour RViz / visualisation standalone -->
+  <xacro:arg name="rail_joint_type" default="prismatic"/>
+
+  <!-- Table (root link - KDL doesn't support inertia here, but Gazebo needs a small mass) -->
   <link name="table">
     <visual>
       <origin xyz="0 0 0.5"/>
@@ -12,6 +16,11 @@
       <origin xyz="0 0 0.5"/>
       <geometry><box size="0.5 2 1"/></geometry>
     </collision>
+    <inertial>
+      <origin xyz="0 0 0.5"/>
+      <mass value="50.0"/>
+      <inertia ixx="0.001" iyy="0.001" izz="0.001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
 
   <!-- Rail sur la table-->
@@ -25,6 +34,11 @@
       <origin xyz="0 0 1.01"/>
       <geometry><box size="0.20 1.9 0.02"/></geometry>
     </collision>
+    <inertial>
+      <origin xyz="0 0 1.01"/>
+      <mass value="5.0"/>
+      <inertia ixx="1.508" iyy="0.0167" izz="1.504" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
   
 
@@ -45,14 +59,21 @@
       <origin xyz="0.0 0 1.03"/>
       <geometry><box size="0.2 0.2 0.02"/></geometry>
     </collision>
+    <inertial>
+      <origin xyz="0.0 0 1.03"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.00333" iyy="0.00333" izz="0.00667" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
 
-  <joint name="rail_joint" type="prismatic">
+  <joint name="rail_joint" type="$(arg rail_joint_type)">
     <origin xyz="0 -0.85 0" rpy="0 0 0"/>
     <parent link="rail"/>
     <child link="montage"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="0" upper="1.7" effort="1000" velocity="0.5"/>
+    <xacro:if value="${'$(arg rail_joint_type)' == 'prismatic'}">
+      <axis xyz="0 1 0"/>
+      <limit lower="0" upper="1.7" effort="1000" velocity="0.5"/>
+    </xacro:if>
   </joint>
   
   
