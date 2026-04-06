@@ -47,6 +47,7 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 #include "control_msgs/action/follow_joint_trajectory.hpp"
@@ -105,10 +106,16 @@ public:
         action_client_ = rclcpp_action::create_client<FollowJT>(
             this, "/fr3_arm_controller/follow_joint_trajectory");
 
+        // ── Publisher busy → GUI désactive le bouton pendant le mouvement ─
+        pub_busy_ = this->create_publisher<std_msgs::msg::Bool>(
+            "/cartesian_commander/busy", 10);
+
         // ── Initialisation KDL (asynchrone, attend robot_state_publisher) ─
         init_timer_ = this->create_wall_timer(
             std::chrono::seconds(1),
             std::bind(&CartesianCommander::tryInitKDL, this));
+
+        publishBusy(false);  // démarrage : pas occupé
 
         RCLCPP_INFO(get_logger(),
             "cartesian_commander demarré.\n"
@@ -236,6 +243,17 @@ private:
     }
 
     // ====================================================================
+    // Helper : publie l'état occupé/libre sur /cartesian_commander/busy
+    // ====================================================================
+
+    void publishBusy(bool busy)
+    {
+        std_msgs::msg::Bool msg;
+        msg.data = busy;
+        pub_busy_->publish(msg);
+    }
+
+    // ====================================================================
     // Callback : mise à jour de la configuration courante
     // ====================================================================
 
@@ -343,6 +361,8 @@ private:
         traj.points = {pt_start, pt_end};
 
         // ── Envoi du goal ────────────────────────────────────────────────
+        publishBusy(true);  // GUI : désactiver le bouton
+
         auto goal = FollowJT::Goal();
         goal.trajectory          = traj;
         goal.goal_time_tolerance = rclcpp::Duration::from_seconds(1.0);
@@ -353,6 +373,7 @@ private:
             [this](const GoalHandleFollowJT::SharedPtr & handle) {
                 if (!handle) {
                     RCLCPP_ERROR(get_logger(), "Goal rejeté par le contrôleur.");
+                    publishBusy(false);
                 } else {
                     RCLCPP_INFO(get_logger(), "Goal accepté — mouvement en cours.");
                 }
@@ -362,14 +383,15 @@ private:
             [this](const GoalHandleFollowJT::WrappedResult & res) {
                 switch (res.code) {
                     case rclcpp_action::ResultCode::SUCCEEDED:
-                        RCLCPP_INFO(get_logger(),  "Mouvement terminé.");       break;
+                        RCLCPP_INFO(get_logger(),  "Mouvement terminé.");  break;
                     case rclcpp_action::ResultCode::ABORTED:
-                        RCLCPP_ERROR(get_logger(), "Mouvement aborté.");        break;
+                        RCLCPP_ERROR(get_logger(), "Mouvement aborté.");   break;
                     case rclcpp_action::ResultCode::CANCELED:
-                        RCLCPP_WARN(get_logger(),  "Mouvement annulé.");        break;
+                        RCLCPP_WARN(get_logger(),  "Mouvement annulé.");   break;
                     default:
                         RCLCPP_ERROR(get_logger(), "Résultat inconnu.");
                 }
+                publishBusy(false);  // GUI : réactiver le bouton
             };
 
         action_client_->async_send_goal(goal, opts);
@@ -394,6 +416,7 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr    sub_joints_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  sub_pose_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr                 pub_busy_;
     rclcpp_action::Client<FollowJT>::SharedPtr action_client_;
     rclcpp::TimerBase::SharedPtr init_timer_;
 };
