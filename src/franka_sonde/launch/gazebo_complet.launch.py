@@ -1,18 +1,15 @@
 # gazebo_complet.launch.py
 # =========================
-# Lance la simulation Gazebo du robot complet (srr.xacro).
-#
-# Contrôleurs chargés :
-#   joint_state_broadcaster         (toujours)
-#   joint_position_example_controller  (maintient la pose initiale)
-#
-# Le joint_position_example_controller est déjà enregistré dans
-# franka_gazebo_controllers.yaml (chargé par le plugin Ignition).
-# Il commande les joints en POSITION : le robot tient sa pose initiale
-# avec une légère oscillation de démonstration (~4.5°).
-#
-# Prochain pas : remplacer joint_position_example_controller par notre
-# propre plugin ros2_control qui acceptera des commandes cartésiennes.
+# Séquence de lancement :
+#   1. Gazebo vide
+#   2. robot_state_publisher  (srr.xacro → /robot_description)
+#   3. joint_state_publisher  (fournit rail_joint=0)
+#   4. spawn du robot dans Gazebo
+#   5. joint_state_broadcaster activé
+#   6. fr3_arm_controller activé  (JointTrajectoryController position)
+#   7. cartesian_commander démarré
+#      → envoie la trajectoire vers la pose "ready" au démarrage
+#      → attend ensuite des poses sur /target_pose
 
 import os
 import xacro
@@ -26,6 +23,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     OpaqueFunction,
     RegisterEventHandler,
+    TimerAction,
 )
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -80,7 +78,7 @@ def generate_launch_description():
         args=[robot_type, load_gripper]
     )
 
-    # Gazebo — resource path : franka_description ET franka_sonde (meshes sonde)
+    # Gazebo
     os.environ['GZ_SIM_RESOURCE_PATH'] = ':'.join([
         os.path.dirname(get_package_share_directory('franka_description')),
         os.path.dirname(get_package_share_directory('franka_sonde')),
@@ -100,28 +98,47 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Contrôleurs — même pattern que les exemples Franka officiels
-    # (ExecuteProcess + ros2 control load_controller)
+    # rail_joint n'a pas d'interface ros2_control (joint fixe) :
+    # joint_state_publisher le publie à 0.0 pour que robot_state_publisher
+    # puisse calculer /tf correctement.
+    joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        parameters=[{'source_list': ['joint_states'], 'rate': 30}],
+    )
+
+    # Contrôleurs
     load_jsb = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller',
              '--set-state', 'active', 'joint_state_broadcaster'],
         output='screen'
     )
 
-    load_position_ctrl = ExecuteProcess(
+    load_arm_ctrl = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller',
-             '--set-state', 'active', 'joint_position_example_controller'],
+             '--set-state', 'active', 'fr3_arm_controller'],
         output='screen'
     )
 
-    # joint_state_publisher : fournit rail_joint = 0.0
-    # (rail_joint n'a pas d'interface ros2_control, joint_state_broadcaster
-    #  ne le publie pas — joint_state_publisher comble ce manque)
-    joint_state_publisher = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_publisher',
-        parameters=[{'source_list': ['joint_states'], 'rate': 30}],
+    # cartesian_commander :
+    # - se connecte à /joint_states et /fr3_arm_controller/follow_joint_trajectory
+    # - à l'init, envoie automatiquement la trajectoire vers la pose "ready"
+    # - attend ensuite des commandes sur /target_pose
+    # Délai de 3s pour laisser fr3_arm_controller s'activer complètement.
+    cartesian_commander = TimerAction(
+        period=3.0,
+        actions=[Node(
+            package='controleurs',
+            executable='cartesian_commander',
+            name='cartesian_commander',
+            output='screen',
+            parameters=[{
+                'move_duration': 5.0,   # durée du mouvement vers ready (s)
+                'ik_max_iter':   200,
+                'ik_tolerance':  1e-5,
+            }],
+        )]
     )
 
     return LaunchDescription([
@@ -131,18 +148,22 @@ def generate_launch_description():
         robot_state_publisher,
         joint_state_publisher,
         spawn_robot,
-        # spawn_robot fini → charger joint_state_broadcaster
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn_robot,
                 on_exit=[load_jsb],
             )
         ),
-        # jsb actif → charger le contrôleur de position
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_jsb,
-                on_exit=[load_position_ctrl],
+                on_exit=[load_arm_ctrl],
+            )
+        ),
+        RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=load_arm_ctrl,
+                on_exit=[cartesian_commander],
             )
         ),
     ])

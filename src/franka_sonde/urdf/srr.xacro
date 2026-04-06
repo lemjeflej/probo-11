@@ -139,4 +139,15 @@
        Le rail_joint est laissé sans interface ros2_control pour l'instant.
        Son état est fourni par joint_state_publisher dans le launch file. -->
 
+  <!-- Second fichier de paramètres injecté dans le plugin Ignition.
+       Le plugin accepte plusieurs balises <parameters> et les accumule.
+       Cela permet d'enregistrer fr3_arm_controller sans modifier
+       franka_gazebo_controllers.yaml (package upstream). -->
+  <gazebo>
+    <plugin filename="franka_ign_ros2_control-system"
+            name="ign_ros2_control::IgnitionROS2ControlPlugin">
+      <parameters>$(find franka_sonde)/config/arm_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
 </robot>

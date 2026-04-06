@@ -74,6 +74,10 @@ static const std::vector<std::string> ARM_JOINTS = {
 static const double Q_MIN[7] = {-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973};
 static const double Q_MAX[7] = { 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973};
 
+// Configuration "ready" — pose initiale au démarrage
+// q2=-45°, q4=-135°, q6=90°, q7=45° (même que les initial_value URDF)
+static const double Q_READY[7] = {0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785};
+
 // Configuration "home" utilisée comme seed initial pour l'IK
 static const double Q_HOME[7] = {0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785};
 
@@ -178,8 +182,57 @@ private:
         kdl_ready_ = true;
         init_timer_->cancel();
 
-        RCLCPP_INFO(get_logger(),
-            "KDL pret. Publiez une pose sur /target_pose pour bouger le robot.");
+        RCLCPP_INFO(get_logger(), "KDL pret. Envoi de la trajectoire vers la pose ready...");
+        goToReady();
+    }
+
+    // ====================================================================
+    // Trajectoire vers la pose "ready" au démarrage
+    // ====================================================================
+
+    void goToReady()
+    {
+        if (!action_client_->wait_for_action_server(std::chrono::seconds(5))) {
+            RCLCPP_ERROR(get_logger(),
+                "Action server fr3_arm_controller non disponible pour goToReady.");
+            return;
+        }
+
+        trajectory_msgs::msg::JointTrajectory traj;
+        traj.joint_names = ARM_JOINTS;
+
+        // Point de départ : configuration courante (joints à 0 au spawn)
+        trajectory_msgs::msg::JointTrajectoryPoint pt_start;
+        pt_start.positions.assign(current_q_, current_q_ + 7);
+        pt_start.velocities.resize(7, 0.0);
+        pt_start.accelerations.resize(7, 0.0);
+        pt_start.time_from_start = rclcpp::Duration::from_seconds(0.0);
+
+        // Point d'arrivée : pose ready
+        trajectory_msgs::msg::JointTrajectoryPoint pt_ready;
+        pt_ready.positions.assign(Q_READY, Q_READY + 7);
+        pt_ready.velocities.resize(7, 0.0);
+        pt_ready.accelerations.resize(7, 0.0);
+        pt_ready.time_from_start = rclcpp::Duration::from_seconds(move_duration_);
+
+        traj.points = {pt_start, pt_ready};
+
+        auto goal = FollowJT::Goal();
+        goal.trajectory          = traj;
+        goal.goal_time_tolerance = rclcpp::Duration::from_seconds(1.0);
+
+        auto opts = rclcpp_action::Client<FollowJT>::SendGoalOptions();
+        opts.result_callback =
+            [this](const GoalHandleFollowJT::WrappedResult & res) {
+                if (res.code == rclcpp_action::ResultCode::SUCCEEDED) {
+                    RCLCPP_INFO(get_logger(),
+                        "Pose ready atteinte. Publiez sur /target_pose pour commander le robot.");
+                } else {
+                    RCLCPP_ERROR(get_logger(), "Echec du mouvement vers ready.");
+                }
+            };
+
+        action_client_->async_send_goal(goal, opts);
     }
 
     // ====================================================================

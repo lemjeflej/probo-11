@@ -1,0 +1,35 @@
+# arm_controllers.yaml
+# =====================
+# Déclaration de fr3_arm_controller pour le controller_manager Gazebo.
+# Ce fichier est injecté via un second bloc <gazebo><parameters> dans
+# srr.xacro, en complément de franka_gazebo_controllers.yaml.
+
+controller_manager:
+  ros__parameters:
+    update_rate: 1000
+
+    fr3_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+fr3_arm_controller:
+  ros__parameters:
+    joints:
+      - fr3_joint1
+      - fr3_joint2
+      - fr3_joint3
+      - fr3_joint4
+      - fr3_joint5
+      - fr3_joint6
+      - fr3_joint7
+
+    command_interfaces:
+      - position
+
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    open_loop_control: true
