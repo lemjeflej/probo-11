@@ -2,6 +2,7 @@
 build/
 install/
 log/
+deleted/
 
 # External dependencies (managed by .repos files)
 src/franka_ros2/

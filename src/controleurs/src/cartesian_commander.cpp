@@ -182,12 +182,12 @@ private:
             q_max(i) = Q_MAX[i];
         }
 
-        auto ik_vel = std::make_unique<KDL::ChainIkSolverVel_pinv>(chain_);
-        ik_solver_  = std::make_unique<KDL::ChainIkSolverPos_NR_JL>(
+        ik_vel_    = std::make_unique<KDL::ChainIkSolverVel_pinv>(chain_);
+        ik_solver_ = std::make_unique<KDL::ChainIkSolverPos_NR_JL>(
             chain_,
             q_min, q_max,
             *fk_solver_,
-            *ik_vel,
+            *ik_vel_,
             ik_max_iter_,
             ik_tolerance_);
 
@@ -413,6 +413,7 @@ private:
     bool kdl_ready_;
     KDL::Chain chain_;
     std::unique_ptr<KDL::ChainFkSolverPos_recursive>  fk_solver_;
+    std::unique_ptr<KDL::ChainIkSolverVel_pinv>       ik_vel_;
     std::unique_ptr<KDL::ChainIkSolverPos_NR_JL>      ik_solver_;
 
     double current_q_[7] = {0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785};
