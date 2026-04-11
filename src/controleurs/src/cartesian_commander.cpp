@@ -130,8 +130,12 @@ private:
 
     void tryInitKDL()
     {
-        auto client = std::make_shared<rclcpp::SyncParametersClient>(
-            this, "robot_state_publisher");
+        // SyncParametersClient crée un executor interne et y ajoute le node.
+        // Si on lui passe `this`, il entre en conflit avec rclcpp::spin.
+        // Solution : node temporaire dédié à la lecture du paramètre.
+        auto tmp_node = std::make_shared<rclcpp::Node>("_kdl_param_reader");
+        auto client   = std::make_shared<rclcpp::SyncParametersClient>(
+            tmp_node, "robot_state_publisher");
 
         if (!client->wait_for_service(std::chrono::milliseconds(500))) {
             return;  // pas encore disponible, réessai au prochain tick (1s)
@@ -152,12 +156,13 @@ private:
             return;
         }
 
-        // Extraire fr3_link0 → sonde_tcp
-        // 7 joints rotatifs + 2 joints fixes (sonde_joint + sonde_tcp_joint)
-        // KDL::getNrOfJoints() ne compte que les joints non-fixes → retourne 7
-        if (!tree.getChain("fr3_link0", "sonde_tcp", chain_)) {
+        // Extraire world → sonde_tcp
+        // La cible est exprimée en coordonnées monde (frame "world").
+        // La chaîne contient : joints fixes (world→montage) + 7 joints FR3 + joints fixes sonde.
+        // KDL::getNrOfJoints() ne compte que les joints non-fixes → retourne 7.
+        if (!tree.getChain("world", "sonde_tcp", chain_)) {
             RCLCPP_ERROR(get_logger(),
-                "Impossible d'extraire fr3_link0 -> sonde_tcp. "
+                "Impossible d'extraire world -> sonde_tcp. "
                 "Vérifier que srr.xacro est bien chargé.");
             return;
         }
@@ -199,9 +204,10 @@ private:
 
     void goToReady()
     {
-        if (!action_client_->wait_for_action_server(std::chrono::seconds(5))) {
+        if (!action_client_->wait_for_action_server(std::chrono::seconds(15))) {
             RCLCPP_ERROR(get_logger(),
                 "Action server fr3_arm_controller non disponible pour goToReady.");
+            publishBusy(false);
             return;
         }
 
@@ -275,14 +281,14 @@ private:
     void onTargetPose(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         if (!kdl_ready_) {
-            RCLCPP_WARN(get_logger(),
-                "Pose reçue mais KDL non initialisé. Ignorer.");
+            RCLCPP_WARN(get_logger(), "Pose reçue mais KDL non initialisé. Ignorer.");
+            publishBusy(false);
             return;
         }
 
         if (!action_client_->wait_for_action_server(std::chrono::seconds(2))) {
-            RCLCPP_ERROR(get_logger(),
-                "Action server fr3_arm_controller non disponible.");
+            RCLCPP_ERROR(get_logger(), "Action server fr3_arm_controller non disponible.");
+            publishBusy(false);
             return;
         }
 
@@ -320,6 +326,7 @@ private:
             if (ret < 0) {
                 RCLCPP_ERROR(get_logger(),
                     "IK impossible (code %d). Pose hors espace de travail.", ret);
+                publishBusy(false);
                 return;
             }
         }

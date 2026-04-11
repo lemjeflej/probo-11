@@ -50,12 +50,29 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper):
         }
     )
 
+    # The Franka xacro hardcodes franka_gazebo_bringup's controllers yaml into
+    # the Gazebo plugin <parameters> element.  In Humble, a controller must be
+    # declared in that yaml at CM startup — ros2 param set after the fact is
+    # not reliably forwarded to dynamically loaded controller nodes.
+    # We swap the path to our augmented yaml (same content + fr3_arm_controller).
+    original_yaml = os.path.join(
+        get_package_share_directory('franka_gazebo_bringup'),
+        'config', 'franka_gazebo_controllers.yaml'
+    )
+    our_yaml = os.path.join(
+        get_package_share_directory('franka_sonde'),
+        'config', 'franka_gazebo_controllers.yaml'
+    )
+    robot_description_xml = robot_description_config.toxml().replace(
+        original_yaml, our_yaml
+    )
+
     return [Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
-        parameters=[{'robot_description': robot_description_config.toxml()}],
+        parameters=[{'robot_description': robot_description_xml}],
     )]
 
 
@@ -108,13 +125,18 @@ def generate_launch_description():
         parameters=[{'source_list': ['joint_states'], 'rate': 30}],
     )
 
-    # Contrôleurs
+    # joint_state_broadcaster : type connu de franka_gazebo_controllers.yaml
+    # → on peut utiliser load_controller directement
     load_jsb = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller',
              '--set-state', 'active', 'joint_state_broadcaster'],
         output='screen'
     )
 
+    # fr3_arm_controller :
+    # Le type et les params sont définis dans franka_gazebo_controllers.yaml
+    # (version augmentée installée par franka_sonde qui shadow l'originale).
+    # Le CM Gazebo charge ce yaml au démarrage → load_controller suffit.
     load_arm_ctrl = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller',
              '--set-state', 'active', 'fr3_arm_controller'],
