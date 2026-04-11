@@ -1,133 +1,94 @@
 # PROBO-11 — FR3 sur rail linéaire (ROS 2 Humble + Gazebo)
 
-Simulation d'un bras Franka FR3 monté sur un rail linéaire de 1.9 m, avec sonde échographique en end-effector. Objectif : valider une stratégie de placement optimal du robot par rapport à une région anatomique cible.
+Simulation d'un bras Franka FR3 sur rail linéaire de 1.9 m avec sonde échographique. Objectif : valider une stratégie de placement optimal du robot par rapport à une cible anatomique.
 
 ## Packages
 
 | Package | Rôle |
 |---|---|
-| `franka_sonde` | URDF, launch, config controllers, scène patient |
-| `controleurs` | Nœud IK + action client (`cartesian_commander`), GUI pose |
-| `carte` | Carte de capacité (accessibilité + manipulabilité) + sélecteur rail optimal |
-| `franka_description` | URDF officiel Franka — **ne pas modifier** |
-| `franka_ros2` | Intégration ROS 2, bridge Gazebo — **ne pas modifier** |
-| `libfranka` | Lib C++ bas niveau — **ne pas modifier** |
+| `franka_sonde` | URDF, launch, controllers, scène patient |
+| `controleurs` | `cartesian_commander` (IK KDL), `pose_gui` |
+| `carte` | Carte de capacité + sélecteur rail optimal |
+| `franka_description` / `franka_ros2` / `libfranka` | Upstream Franka — **ne pas modifier** |
 
 ## Installation
 
 ```bash
-git clone https://github.com/lemjeflej/probo-11.git probo-11
-cd probo-11
-
-# Dépendances Franka
 vcs import src < franka.repos
 vcs import src < src/franka_ros2/dependency.repos
-
-# Sous-modules libfranka (obligatoire)
 cd src/libfranka && git submodule update --init --recursive && cd ../..
-
-# Dépendances système
 rosdep install --from-paths src --ignore-src -r -y
-
-# Dépendances Python (carte de capacité)
 pip install roboticstoolbox-python spatialmath-python matplotlib numpy
-
-# Build (~7 min, warnings franka_* normaux)
-colcon build --symlink-install
-source install/setup.bash
+colcon build --symlink-install && source install/setup.bash
 ```
 
-## Workflow complet
-
-### 1. Déterminer la position rail optimale
+## Workflow
 
 ```bash
-cd src/carte
-# Modifier TARGET_WORLD dans optimal_rail_finder.py selon la cible souhaitée
-python3 optimal_rail_finder.py
-# → affiche le rail_position optimal + la commande de lancement
-```
+# 1. Trouver la position rail optimale pour une cible world (x, y, z)
+cd src/carte && python3 optimal_rail_finder.py
 
-### 2. Lancer la simulation avec ce rail
-
-```bash
+# 2. Lancer la simulation avec ce rail
 ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=<valeur>
+
+# 3. Commander le bras (terminal séparé)
+ros2 run controleurs pose_gui
 ```
 
-### 3. Commander le bras
+Le GUI se remplit automatiquement avec la pose TCP courante. Les poses sont en frame **`fr3_link0`**.
 
-```bash
-# Terminal séparé
-ros2 run controleurs pose_gui.py
+## Contrainte rail — pourquoi le joint est fixe
+
+Le plugin Franka Gazebo (`franka_ign_ros2_control/IgnitionSystem`) construit sa chaîne KDL depuis `world` jusqu'au tip de **l'URDF entier**, puis calcule la compensation gravitationnelle sur exactement 7 joints (hardcodé). Un joint prismatique dans ce chemin → 8 joints → crash → tous les controllers inactifs.
+
+```cpp
+// ign_ros2_control_plugin.cpp
+root_link = model.getRoot()->name;  // "world"
+tip_link  = findTipLink(model);     // "sonde_tcp"
+kdl_model_ = ModelKDL(model, root_link, tip_link);
+// prismatique dans ce chemin → JntToGravity plante
 ```
 
-Entrer la pose cible en frame **`fr3_link0`** (base du bras).
+Le pattern standard (deux blocs `<ros2_control>`) ne contourne pas ce problème car le plugin lit le modèle complet indépendamment des blocs déclarés.
 
-## Position du rail
+**Solution actuelle** : `rail_joint` reste `fixed`, position baked dans l'URDF au lancement via xacro arg.
 
-Fixée au lancement via `rail_position` (0.0 → 1.7 m), baked dans l'URDF.
+## Couplage rail dynamique (branche `feature/rail-dynamique`)
 
-**Pourquoi** : `franka_ign_ros2_control` construit une chaîne KDL interne pour la compensation gravitationnelle. Un joint prismatique dans la chaîne fait planter cette compensation et désactive tous les controllers. Solution : joint fixe avec position d'origine variable au parsing xacro.
+### Approche retenue
 
-```bash
-ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=0.0
-ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=0.5
-ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=1.2
-```
+Découpler l'ancrage du bras du rail dans l'URDF : le bras est fixé directement à `world` avec un offset Y variable. Le rail existe comme entité visuelle séparée avec son propre bloc `<ros2_control>` + `gz_ros2_control/GazeboSystem`. Ça fonctionne identiquement en simulation et sur le vrai hardware.
+
+### Étapes
+
+1. **URDF** — Séparer ancrage bras (joint `world → fr3_link0`, offset Y variable) du rail visuel
+2. **`rail_mover` node** — Souscrit `/target_rail_pos`, met à jour l'offset, republie `robot_description`
+3. **Launch** — Intégrer `rail_mover` dans `gazebo_complet.launch.py`
+4. **`cartesian_commander`** — Calculer rail optimal → attendre repositionnement → IK + trajectoire bras
 
 ## Carte de capacité
 
-Précalculée par `src/carte/Capacity_Map_Creator.py`, stockée dans `src/carte/results/`.
-
-| Fichier | Contenu |
-|---|---|
-| `voxels_Z_X.XX.pkl` | Voxels d'une strate Z avec accessibilité (%) et manipulabilité |
-| `Voxel_visualisation.py` | Visualisation 3D des cartes |
-| `optimal_rail_finder.py` | Sélection automatique du rail optimal pour une cible donnée |
+Strates Z ∈ [0.0, 0.3 m] en frame `fr3_link0`, précalculées par `Capacity_Map_Creator.py`.
 
 ```bash
 cd src/carte
-python3 Voxel_visualisation.py       # visualiser la carte
-python3 optimal_rail_finder.py       # trouver le rail optimal
+python3 Voxel_visualisation.py    # visualiser
+python3 optimal_rail_finder.py    # trouver le rail optimal
 ```
 
-## Repères et coordonnées
-
-Les poses GUI sont en frame **`fr3_link0`** (base du bras).
+## Repères
 
 ```
-world
- └─ table
-     └─ rail
-         └─ rail_joint (fixed, origin y = -0.85 + rail_position)
-             └─ montage
-                 └─ fr3_link0  (z = +1.04 m)
-                     └─ [7 joints FR3]
-                         └─ fr3_link8
-                             └─ sonde_base  (flip 180° autour X)
-                                 └─ sonde_tcp  (+0.2 m en Z)
+world → table → rail → rail_joint (fixed, y = -0.85 + rail_position)
+    → montage → fr3_link0 (z=+1.04) → [7 joints] → fr3_link8
+    → sonde_base (flip 180° X) → sonde_tcp (+0.2 m Z)
 ```
 
-Espace de travail accessible (frame `fr3_link0`) :
-
-```
-x :  0.1 → 0.8 m
-y : -0.7 → 0.7 m
-z :  0.1 → 0.9 m
-```
-
-## Scène patient
-
-Spawné automatiquement au lancement. Table d'examen + mannequin simplifié positionné devant le robot. Modifier `src/franka_sonde/urdf/patient_scene.urdf` pour ajuster la géométrie.
+Espace de travail (frame `fr3_link0`) : x [0.1–0.8], y [−0.7–0.7], z [0.0–0.3] m
 
 ## Dépannage
 
-**Controllers en `inactive`** : joint prismatique dans l'URDF — vérifier que `rail_joint` est `fixed`.
-
-**IK impossible (code -5)** : pose hors espace de travail en frame `fr3_link0`.
-
-**`fr3_arm_controller` non chargé** : rebuilder `franka_sonde` et re-sourcer.
-
-**libfranka ne compile pas** : `cd src/libfranka && git submodule update --init --recursive`.
-
-**Warnings `allow_nonzero_velocity_at_trajectory_end`** : dépréciation sans impact fonctionnel.
+- **Controllers inactifs** : `rail_joint` pas `fixed` dans l'URDF
+- **IK code −5** : pose hors espace de travail en frame `fr3_link0`
+- **`fr3_arm_controller` non chargé** : rebuilder `franka_sonde` et re-sourcer
+- **libfranka ne compile pas** : `cd src/libfranka && git submodule update --init --recursive`
