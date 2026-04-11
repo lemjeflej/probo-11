@@ -1,0 +1,129 @@
+<?xml version="1.0"?>
+<!--
+  patient_scene.urdf
+  ==================
+  Scène statique simulant un patient allongé sur une table d'examen,
+  positionné devant le robot FR3.
+
+  Géométrie (frame world) :
+    Table patient : 0.4 m × 2.0 m × 1.1 m (h)
+                    posée au sol, centrée à x=0.6, y=0.0
+    Corps patient : cylindre Ø0.3 m (torse)
+                    à x=0.6, y=0.0, z=1.25 m (sur la table)
+    Tête          : sphère Ø0.2 m
+                    à x=0.6, y=-0.7, z=1.25 m  (extrémité du lit)
+
+  Ce fichier est spawné comme entité indépendante dans Gazebo —
+  il n'est pas lié au URDF du robot et n'affecte pas les controllers.
+
+  Pour modifier la position du patient par rapport au robot, ajuster
+  les <origin> des joints world_to_patient_table et suivants.
+-->
+<robot name="patient_scene">
+
+  <!-- Lien monde (nécessaire pour ancrer la scène) -->
+  <link name="world"/>
+
+  <!-- =====================
+       TABLE D'EXAMEN
+  ===================== -->
+  <link name="patient_table">
+    <visual>
+      <origin xyz="0 0 0.50"/>
+      <geometry>
+        <box size="0.4 2.0 1.0"/>
+      </geometry>
+      <material name="white">
+        <color rgba="0.95 0.95 0.95 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.50"/>
+      <geometry>
+        <box size="0.4 2.0 1.0"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="50.0"/>
+      <inertia ixx="0.001" iyy="0.001" izz="0.001"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="world_to_patient_table" type="fixed">
+    <!-- x=0.6 : 60 cm devant le robot
+         y=0.0 : centré sur le rail
+         z=0.0 : posé au sol -->
+    <origin xyz="0.6 0.0 0.0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child  link="patient_table"/>
+  </joint>
+
+  <!-- =====================
+       TORSE DU PATIENT
+  ===================== -->
+  <link name="patient_torso">
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <!-- Cylindre horizontal : axe Y = longueur du corps -->
+        <cylinder radius="0.15" length="0.6"/>
+      </geometry>
+      <material name="skin">
+        <color rgba="0.87 0.72 0.53 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.15" length="0.6"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="30.0"/>
+      <inertia ixx="0.001" iyy="0.001" izz="0.001"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="table_to_torso" type="fixed">
+    <!-- Posé sur la table (z=0.8 table + 0.15 rayon = 0.95) →
+         en frame world : z = 0.95
+         rpy π/2 0 0 : couché sur le dos, axe du cylindre le long de Y -->
+    <origin xyz="0.0 0.0 1.15" rpy="1.5707963 0 0"/>
+    <parent link="patient_table"/>
+    <child  link="patient_torso"/>
+  </joint>
+
+  <!-- =====================
+       TÊTE DU PATIENT
+  ===================== -->
+  <link name="patient_head">
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.10"/>
+      </geometry>
+      <material name="skin"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.10"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="5.0"/>
+      <inertia ixx="0.001" iyy="0.001" izz="0.001"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="torso_to_head" type="fixed">
+    <!-- 0.4 m vers le bas du lit (y négatif = vers la tête) -->
+    <origin xyz="0.0 -0.4 0.0" rpy="0 0 0"/>
+    <parent link="patient_torso"/>
+    <child  link="patient_head"/>
+  </joint>
+
+</robot>

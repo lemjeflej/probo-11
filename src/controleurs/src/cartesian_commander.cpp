@@ -311,43 +311,75 @@ private:
             "Pose cible (fr3_link0) : pos=(%.3f, %.3f, %.3f)  quat=(%.3f, %.3f, %.3f, %.3f)",
             p.x, p.y, p.z, q.x, q.y, q.z, q.w);
 
-        // ── IK — seed : config courante ──────────────────────────────────
+        // ── IK — multi-seed : minimise le déplacement articulaire ───────
+        // On essaie plusieurs seeds et on garde la solution la plus proche
+        // de la configuration courante en espace articulaire.
+        // Cela évite les sauts de branche (coude haut/bas) quand
+        // seule l'orientation change.
         int nj = static_cast<int>(chain_.getNrOfJoints());
+
+        // Seeds à essayer dans l'ordre
+        const double* SEEDS[] = { current_q_, Q_HOME, Q_READY };
+        const char*   SEED_NAMES[] = { "courante", "home", "ready" };
+        constexpr int N_SEEDS = 3;
+
         KDL::JntArray q_seed(nj), q_out(nj);
-        for (int i = 0; i < nj; ++i) {
-            q_seed(i) = current_q_[i];
-        }
+        KDL::JntArray best_q(nj);
+        double best_dist = std::numeric_limits<double>::max();
+        bool   found     = false;
 
-        int ret = ik_solver_->CartToJnt(q_seed, target, q_out);
+        for (int s = 0; s < N_SEEDS; ++s) {
+            for (int i = 0; i < nj; ++i) q_seed(i) = SEEDS[s][i];
+            KDL::JntArray q_candidate(nj);
+            int ret = ik_solver_->CartToJnt(q_seed, target, q_candidate);
+            if (ret < 0) continue;
 
-        if (ret < 0) {
-            RCLCPP_WARN(get_logger(),
-                "IK echouée depuis config courante (code %d). "
-                "Tentative depuis home...", ret);
+            // Vérification position (rejeter les solutions divergentes)
+            KDL::Frame fk_tmp;
+            fk_solver_->JntToCart(q_candidate, fk_tmp);
+            double pos_err = (fk_tmp.p - target.p).Norm();
+            if (pos_err > 0.003) {          // 3 mm — seuil strict
+                RCLCPP_DEBUG(get_logger(),
+                    "Seed '%s' : solution rejetée (err pos = %.4f m)",
+                    SEED_NAMES[s], pos_err);
+                continue;
+            }
 
+            // Distance articulaire à la config courante
+            double dist = 0.0;
             for (int i = 0; i < nj; ++i) {
-                q_seed(i) = Q_HOME[i];
+                double d = q_candidate(i) - current_q_[i];
+                dist += d * d;
             }
-            ret = ik_solver_->CartToJnt(q_seed, target, q_out);
 
-            if (ret < 0) {
-                RCLCPP_ERROR(get_logger(),
-                    "IK impossible (code %d). Pose hors espace de travail.", ret);
-                publishBusy(false);
-                return;
+            if (!found || dist < best_dist) {
+                best_dist = dist;
+                best_q    = q_candidate;
+                found     = true;
+                RCLCPP_DEBUG(get_logger(),
+                    "Seed '%s' : IK ok, err=%.4f m, dist_q=%.4f",
+                    SEED_NAMES[s], pos_err, std::sqrt(dist));
             }
         }
+
+        if (!found) {
+            RCLCPP_ERROR(get_logger(),
+                "IK impossible depuis tous les seeds. "
+                "Pose hors espace de travail ou orientation singulière.");
+            publishBusy(false);
+            return;
+        }
+        q_out = best_q;
 
         // ── Vérification FK ─────────────────────────────────────────────
         KDL::Frame fk_check;
         fk_solver_->JntToCart(q_out, fk_check);
         double pos_err = (fk_check.p - target.p).Norm();
         RCLCPP_INFO(get_logger(),
-            "IK reussie. Erreur residuelle : %.6f m", pos_err);
-        if (pos_err > 0.005) {
-            RCLCPP_WARN(get_logger(),
-                "Erreur IK > 5 mm — pose probablement hors espace de travail.");
-        }
+            "IK reussie. TCP : (%.3f, %.3f, %.3f)  erreur pos : %.4f m  "
+            "dist articulaire : %.4f rad",
+            fk_check.p.x(), fk_check.p.y(), fk_check.p.z(),
+            pos_err, std::sqrt(best_dist));
 
         // ── Trajectoire ─────────────────────────────────────────────────
         // Deux points :  t=0 (départ, vitesse nulle)  /  t=T (cible, vitesse nulle)

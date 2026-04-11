@@ -118,6 +118,17 @@ def generate_launch_description():
         output='screen',
     )
 
+    patient_urdf = os.path.join(
+        get_package_share_directory('franka_sonde'),
+        'urdf', 'patient_scene.urdf'
+    )
+    spawn_patient = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=['-file', patient_urdf, '-name', 'patient'],
+        output='screen',
+    )
+
     load_jsb = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller',
              '--set-state', 'active', 'joint_state_broadcaster'],
@@ -153,6 +164,7 @@ def generate_launch_description():
         gazebo,
         robot_state_publisher,
         spawn_robot,
+        spawn_patient,
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn_robot,
