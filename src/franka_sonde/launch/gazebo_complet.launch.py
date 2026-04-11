@@ -142,6 +142,12 @@ def generate_launch_description():
         output='screen'
     )
 
+    load_rail_ctrl = ExecuteProcess(
+        cmd=['ros2', 'control', 'load_controller',
+             '--set-state', 'active', 'rail_controller'],
+        output='screen'
+    )
+
     # cartesian_commander :
     # - se connecte à /joint_states et /fr3_arm_controller/follow_joint_trajectory
     # - à l'init, envoie automatiquement la trajectoire vers la pose "ready"
@@ -184,6 +190,12 @@ def generate_launch_description():
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_arm_ctrl,
+                on_exit=[load_rail_ctrl],
+            )
+        ),
+        RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=load_rail_ctrl,
                 on_exit=[cartesian_commander],
             )
         ),
