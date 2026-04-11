@@ -1,0 +1,86 @@
+import numpy as np
+from roboticstoolbox import DHRobot, RevoluteDH
+from spatialmath import SE3
+
+# ===========================
+# 1. Modèle Panda
+# ===========================
+a = [0, 0, 0, 0.0825, -0.0825, 0, 0.088]
+alpha = [0, -np.pi/2, np.pi/2, np.pi/2, -np.pi/2, np.pi/2, np.pi/2]
+d = [0.333, 0, 0.316, 0, 0.384, 0, 0]
+
+links = [RevoluteDH(d=d[i], a=a[i], alpha=alpha[i]) for i in range(7)]
+panda = DHRobot(links, name="Panda")
+
+panda.tool = SE3(0, 0, 0.20)
+
+# ===========================
+# 2. Humain (boîte)
+# ===========================
+center = np.array([0.2, 0.0, 0.10])
+
+width_x = 0.4
+length_y = 1.7
+height_z = 0.2
+
+def is_in_human_body(p, c):
+    dx = abs(p[0] - c[0])
+    dy = abs(p[1] - c[1])
+    dz = abs(p[2] - c[2])
+    return (dx <= width_x/2 and dy <= length_y/2 and dz <= height_z/2)
+
+def collision(q):
+    for Ti in panda.fkine_all(q):
+        if is_in_human_body(Ti.t, center):
+            return True
+    return False
+
+# ===========================
+# 3. Cible
+# ===========================
+T_base = SE3(0, 0.8, 0)
+T_target_world = SE3(0.5, 0.8, 0.3)
+
+# IMPORTANT : on NE fixe PAS l’orientation
+# ===========================
+# 4. IK relaxée (position seulement)
+# ===========================
+best_q = None
+best_score = -np.inf
+
+# on teste plusieurs départs
+for _ in range(20):
+    q0 = np.random.uniform(-1, 1, 7)
+
+    sol = panda.ikine_LM(
+        T_target_world,
+        q0=q0,
+        mask=[1, 1, 1, 0, 0, 0],  # 🔥 seulement position
+        ilimit=200
+    )
+
+    if not sol.success:
+        continue
+
+    if collision(sol.q):
+        continue
+
+    # manipulabilité
+    J = panda.jacob0(sol.q)
+    score = np.linalg.svd(J, compute_uv=False).prod()
+
+    if score > best_score:
+        best_score = score
+        best_q = sol.q
+
+# ===========================
+# 5. Résultat
+# ===========================
+print("\n===== RESULTAT =====")
+
+if best_q is not None:
+    print("Solution trouvée ✅")
+    print(np.round(best_q, 4))
+    print("Score :", best_score)
+else:
+    print("❌ Toujours aucune solution")
