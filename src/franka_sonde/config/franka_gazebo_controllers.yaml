@@ -26,9 +26,6 @@ controller_manager:
     fr3_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-    rail_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
-
 
 joint_position_example_controller:
   ros__parameters:
@@ -56,23 +53,6 @@ joint_impedance_example_controller:
       - 1.0
       - 1.0
       - 0.5
-
-rail_controller:
-  ros__parameters:
-    joints:
-      - rail_joint
-
-    command_interfaces:
-      - position
-
-    state_interfaces:
-      - position
-      - velocity
-
-    state_publish_rate: 50.0
-    action_monitor_rate: 20.0
-    allow_partial_joints_goal: false
-    open_loop_control: true
 
 fr3_arm_controller:
   ros__parameters:

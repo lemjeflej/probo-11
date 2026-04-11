@@ -38,7 +38,11 @@ source install/setup.bash
 ### Lancer la simulation
 
 ```bash
+# Position rail par défaut (0.0 m)
 ros2 launch franka_sonde gazebo_complet.launch.py
+
+# Avec une position rail choisie (0.0 → 1.7 m)
+ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=0.5
 ```
 
 Séquence automatique : Gazebo → robot_state_publisher → joint_state_broadcaster → fr3_arm_controller → cartesian_commander (pose ready).
@@ -56,44 +60,62 @@ colcon build --packages-select franka_sonde controleurs
 source install/setup.bash
 ```
 
+## Position du rail
+
+La position du rail est fixée **au lancement** via l'argument `rail_position` et baked dans l'URDF. Elle ne peut pas être modifiée dynamiquement sans relancer.
+
+**Pourquoi** : `franka_ign_ros2_control` (plugin Gazebo Franka) construit une chaîne KDL interne pour la compensation gravitationnelle. Cette chaîne traverse toute l'arborescence URDF — un joint prismatique dedans fait planter le solveur KDL et désactive tous les controllers. La solution est de fixer le joint et de changer sa position d'origine au moment du parsing xacro.
+
+Pour tester différentes configurations de placement :
+```bash
+ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=0.0
+ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=0.5
+ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=1.2
+```
+
+## Controllers actifs
+
+| Controller | Type | Joint(s) |
+|---|---|---|
+| `joint_state_broadcaster` | JointStateBroadcaster | tous |
+| `fr3_arm_controller` | JointTrajectoryController | fr3_joint1..7 |
+
 ## Repères et coordonnées
 
-**IMPORTANT** : les poses envoyées au robot sont exprimées dans le frame `world`.
+Les poses envoyées via le GUI sont exprimées dans le frame **`fr3_link0`** (base du bras).
 
-La chaîne cinématique depuis `world` jusqu'à `fr3_link0` introduit deux offsets :
-
-```
-world
- └─ table           (z = 0)
-     └─ rail        (z = 0,   y = 0)
-         └─ montage (y = -0.85 m   ← origin du rail_joint)
-             └─ fr3_link0 (z = +1.04 m  ← montage_to_arm)
-```
-
-**fr3_link0 est à `(x=0, y=-0.85, z=1.04)` dans world.**
-
-Pour commander le TCP, penser en coordonnées relatives à `fr3_link0` puis ajouter les offsets :
-
-| Axe | Offset à ajouter |
-|---|---|
-| y | −0.85 m |
-| z | +1.04 m |
+La chaîne KDL du `cartesian_commander` part de `fr3_link0` → `sonde_tcp` (7 joints, bras seul). Le rail est fixe géométriquement pendant la session.
 
 ### Exemple de pose valide
 
 ```
 x =  0.4 m
-y = -0.85 m   (= 0.0 relatif au robot)
-z =  1.5 m    (= 0.46 m au-dessus de fr3_link0)
+y =  0.0 m
+z =  0.46 m   (≈ 46 cm au-dessus de fr3_link0)
 roll = 180°, pitch = 0°, yaw = 0°   (sonde vers le bas)
 ```
 
-L'espace de travail accessible (en frame world) est approximativement :
+Espace de travail accessible (en frame `fr3_link0`) :
 
 ```
-x : 0.1  →  0.8 m
-y : -1.5 →  -0.1 m
-z : 1.1  →  1.9 m
+x :  0.1 → 0.8 m
+y : -0.7 → 0.7 m
+z :  0.1 → 0.9 m
+```
+
+### Architecture URDF (repères clés)
+
+```
+world
+ └─ table
+     └─ rail
+         └─ rail_joint (fixed, origin y = -0.85 + rail_position)
+             └─ montage
+                 └─ fr3_link0  (origin z = +1.04 m)
+                     └─ [7 joints FR3]
+                         └─ fr3_link8
+                             └─ sonde_base  (flip 180° autour X)
+                                 └─ sonde_tcp  (+0.2 m en Z)
 ```
 
 ## Architecture du système
@@ -101,26 +123,27 @@ z : 1.1  →  1.9 m
 ```
 pose_gui.py  →  /target_pose  →  cartesian_commander
                                       │
-                                   IK (KDL)
+                                   IK KDL (fr3_link0 → sonde_tcp)
                                       │
-                              /fr3_arm_controller/
-                              follow_joint_trajectory
+                              /fr3_arm_controller/follow_joint_trajectory
                                       │
                                    Gazebo
 ```
 
 Le `cartesian_commander` :
-- Construit la chaîne KDL `world → sonde_tcp` au démarrage
+- Construit la chaîne KDL `fr3_link0 → sonde_tcp` au démarrage
 - Envoie le robot en pose `ready` automatiquement
 - Résout l'IK depuis la config courante (fallback sur home si échec)
 - Publie `/cartesian_commander/busy` pour bloquer le GUI pendant le mouvement
 
 ## Dépannage
 
-**IK impossible (code -5)** : la pose est hors espace de travail. Vérifier les offsets y/z décrits ci-dessus.
+**Controllers en `inactive`** : le plugin Franka ne supporte pas les joints prismatiques dans sa chaîne KDL. Vérifier que `rail_joint` est bien `fixed` dans `srr.xacro` / `rail_sur_table.xacro`.
 
-**`fr3_arm_controller` non chargé** : le yaml shadow `franka_sonde/config/franka_gazebo_controllers.yaml` doit être installé. Rebuilder `franka_sonde` et re-sourcer.
+**IK impossible (code -5)** : pose hors espace de travail en frame `fr3_link0`. Vérifier les valeurs ci-dessus.
 
-**libfranka ne compile pas** : sous-modules non initialisés. Relancer `cd src/libfranka && git submodule update --init --recursive`.
+**`fr3_arm_controller` non chargé** : rebuilder `franka_sonde` et re-sourcer.
 
-**Warnings `allow_nonzero_velocity_at_trajectory_end`** : avertissement dépréciation de `joint_trajectory_controller`, sans impact fonctionnel.
+**libfranka ne compile pas** : `cd src/libfranka && git submodule update --init --recursive`.
+
+**Warnings `allow_nonzero_velocity_at_trajectory_end`** : dépréciation `joint_trajectory_controller`, sans impact fonctionnel.

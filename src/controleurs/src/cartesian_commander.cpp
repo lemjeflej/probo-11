@@ -89,9 +89,15 @@ public:
     CartesianCommander() : Node("cartesian_commander"), kdl_ready_(false)
     {
         // ── Paramètres ──────────────────────────────────────────────────
-        move_duration_ = this->declare_parameter<double>("move_duration", 3.0);
-        ik_max_iter_   = this->declare_parameter<int>("ik_max_iter", 200);
-        ik_tolerance_  = this->declare_parameter<double>("ik_tolerance", 1e-5);
+        move_duration_  = this->declare_parameter<double>("move_duration", 3.0);
+        ik_max_iter_    = this->declare_parameter<int>("ik_max_iter", 200);
+        ik_tolerance_   = this->declare_parameter<double>("ik_tolerance", 1e-5);
+        // Position du rail (m) — fixée au lancement, identique à rail_position xacro.
+        // fr3_link0 est à y = -0.85 + rail_position dans world.
+        // La chaîne KDL part de fr3_link0, donc aucun offset y n'est nécessaire
+        // dans onTargetPose : les poses GUI sont déjà en frame fr3_link0.
+        // Ce paramètre est conservé pour info / affichage et usage futur.
+        rail_position_  = this->declare_parameter<double>("rail_position", 0.0);
 
         // ── Abonnements ─────────────────────────────────────────────────
         sub_joints_ = this->create_subscription<sensor_msgs::msg::JointState>(
@@ -422,6 +428,7 @@ private:
     double move_duration_;
     int    ik_max_iter_;
     double ik_tolerance_;
+    double rail_position_;
 
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr    sub_joints_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  sub_pose_;

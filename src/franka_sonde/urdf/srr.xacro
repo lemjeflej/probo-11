@@ -35,6 +35,7 @@
   <xacro:arg name="hand"            default="false"/>
   <xacro:arg name="ee_id"           default="none"/>
   <xacro:arg name="gazebo_effort"   default="false"/>
+  <xacro:arg name="rail_position"   default="0.0"/>
 
   <!-- =============================================
        BRAS FR3
@@ -129,34 +130,7 @@
     <origin xyz="0 0 0.2" rpy="0 0 0"/>
   </joint>
 
-  <!-- =============================================
-       RAIL — ros2_control
-       Plugin standard ign_ros2_control (même base que Franka).
-       Bloc séparé → hardware interface indépendante sous le même CM.
-       La chaîne KDL du bras commence à fr3_link0 → ce joint n'est
-       pas vu par l'IK, il est commandé séparément (rail_controller).
-  ============================================= -->
-  <ros2_control name="RailSystem" type="system">
-    <hardware>
-      <plugin>franka_ign_ros2_control/IgnitionSystem</plugin>
-    </hardware>
-    <joint name="rail_joint">
-      <command_interface name="position"/>
-      <state_interface name="position">
-        <param name="initial_value">0.0</param>
-      </state_interface>
-      <state_interface name="velocity"/>
-    </joint>
-  </ros2_control>
-
-  <!-- RailSystem supprimé :
-       mock_components/GenericSystem est incompatible avec
-       franka_ign_ros2_control/IgnitionSystem (base class différente).
-       Le rail_joint est laissé sans interface ros2_control pour l'instant.
-       Son état est fourni par joint_state_publisher dans le launch file. -->
-
-  <!-- fr3_arm_controller est enregistré via spawner avec param-file
-       dans le launch file, pas ici, pour eviter un second
-       controller_manager. -->
+  <!-- rail_joint injecté dans FrankaHardwareInterface via le launch file
+       (même plugin IgnitionSystem, seule solution compatible Gazebo) -->
 
 </robot>

@@ -39,6 +39,7 @@ install(TARGETS
 
 install(PROGRAMS
     scripts/pose_gui.py
+    scripts/rail_state_publisher.py
     DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -3,7 +3,9 @@
 
   <!-- rail_joint_type : "fixed" pour Gazebo (7 DOF → gravity comp OK)
                          "prismatic" pour RViz / visualisation standalone -->
-  <xacro:arg name="rail_joint_type" default="prismatic"/>
+  <!-- Position initiale du rail (m) — passée depuis le launch file.
+       Le joint est fixe pour compatibilité avec FrankaHardwareInterface/KDL. -->
+  <xacro:arg name="rail_position" default="0.0"/>
 
   <!-- Table (root link - KDL doesn't support inertia here, but Gazebo needs a small mass) -->
   <link name="table">
@@ -66,12 +68,10 @@
     </inertial>
   </link>
 
-  <joint name="rail_joint" type="prismatic">
-    <origin xyz="0 -0.85 0" rpy="0 0 0"/>
+  <joint name="rail_joint" type="fixed">
+    <origin xyz="0 ${-0.85 + $(arg rail_position)} 0" rpy="0 0 0"/>
     <parent link="rail"/>
     <child link="montage"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="0" upper="1.7" effort="1000" velocity="0.5"/>
   </joint>
   
   
