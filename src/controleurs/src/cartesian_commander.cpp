@@ -116,6 +116,10 @@ public:
         pub_busy_ = this->create_publisher<std_msgs::msg::Bool>(
             "/cartesian_commander/busy", 10);
 
+        // ── Publisher pose TCP courante → GUI affiche la position du robot ─
+        pub_tcp_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
+            "/current_tcp_pose", 10);
+
         // ── Initialisation KDL (asynchrone, attend robot_state_publisher) ─
         init_timer_ = this->create_wall_timer(
             std::chrono::seconds(1),
@@ -277,6 +281,31 @@ private:
                 }
             }
         }
+
+        // Publier la pose TCP courante dès que KDL est prêt
+        if (!kdl_ready_) return;
+
+        int nj = static_cast<int>(chain_.getNrOfJoints());
+        KDL::JntArray q(nj);
+        for (int i = 0; i < nj; ++i) q(i) = current_q_[i];
+
+        KDL::Frame tcp;
+        fk_solver_->JntToCart(q, tcp);
+
+        double qx, qy, qz, qw;
+        tcp.M.GetQuaternion(qx, qy, qz, qw);
+
+        geometry_msgs::msg::PoseStamped ps;
+        ps.header.stamp    = this->get_clock()->now();
+        ps.header.frame_id = "fr3_link0";
+        ps.pose.position.x = tcp.p.x();
+        ps.pose.position.y = tcp.p.y();
+        ps.pose.position.z = tcp.p.z();
+        ps.pose.orientation.x = qx;
+        ps.pose.orientation.y = qy;
+        ps.pose.orientation.z = qz;
+        ps.pose.orientation.w = qw;
+        pub_tcp_pose_->publish(ps);
     }
 
     // ====================================================================
@@ -465,6 +494,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr    sub_joints_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  sub_pose_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr                 pub_busy_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr     pub_tcp_pose_;
     rclcpp_action::Client<FollowJT>::SharedPtr action_client_;
     rclcpp::TimerBase::SharedPtr init_timer_;
 };

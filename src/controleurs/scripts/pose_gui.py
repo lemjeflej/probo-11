@@ -51,6 +51,28 @@ def euler_deg_to_quaternion(roll_deg, pitch_deg, yaw_deg):
 
 
 # ──────────────────────────────────────────────────────────
+# Conversion Quaternion → Euler (degrés), même convention RPY extrinsic
+# ──────────────────────────────────────────────────────────
+def quaternion_to_euler_deg(qx, qy, qz, qw):
+    # Roll (X)
+    sinr = 2.0 * (qw * qx + qy * qz)
+    cosr = 1.0 - 2.0 * (qx * qx + qy * qy)
+    roll = math.atan2(sinr, cosr)
+
+    # Pitch (Y)
+    sinp = 2.0 * (qw * qy - qz * qx)
+    sinp = max(-1.0, min(1.0, sinp))
+    pitch = math.asin(sinp)
+
+    # Yaw (Z)
+    siny = 2.0 * (qw * qz + qx * qy)
+    cosy = 1.0 - 2.0 * (qy * qy + qz * qz)
+    yaw = math.atan2(siny, cosy)
+
+    return math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
+
+
+# ──────────────────────────────────────────────────────────
 # Nœud ROS 2
 # ──────────────────────────────────────────────────────────
 class PosePublisherNode(Node):
@@ -60,7 +82,8 @@ class PosePublisherNode(Node):
         self.pub = self.create_publisher(PoseStamped, '/target_pose', 5)
 
         self.busy = False
-        self.busy_callbacks = []  # fonctions à appeler quand busy change
+        self.busy_callbacks  = []   # appelés quand busy change
+        self.tcp_callbacks   = []   # appelés quand une nouvelle pose TCP arrive
 
         self.create_subscription(
             Bool,
@@ -68,11 +91,21 @@ class PosePublisherNode(Node):
             self._on_busy,
             10
         )
+        self.create_subscription(
+            PoseStamped,
+            '/current_tcp_pose',
+            self._on_tcp_pose,
+            10
+        )
 
     def _on_busy(self, msg: Bool):
         self.busy = msg.data
         for cb in self.busy_callbacks:
             cb(self.busy)
+
+    def _on_tcp_pose(self, msg: PoseStamped):
+        for cb in self.tcp_callbacks:
+            cb(msg)
 
     def send_pose(self, x, y, z, qx, qy, qz, qw):
         msg = PoseStamped()
@@ -125,7 +158,7 @@ class PoseGUI:
             row=1, column=0, columnspan=3, sticky='w', padx=10)
 
         labels_pos = ['x', 'y', 'z']
-        defaults_pos = ['0.5', '0.0', '1.5']
+        defaults_pos = ['—', '—', '—']
         self.pos_vars = []
         for i, (lbl, dflt) in enumerate(zip(labels_pos, defaults_pos)):
             ttk.Label(self.root, text=lbl + ' :').grid(
@@ -143,7 +176,7 @@ class PoseGUI:
             row=5, column=0, columnspan=3, sticky='w', padx=10, pady=(12, 0))
 
         labels_ori = ['roll (X)', 'pitch (Y)', 'yaw (Z)']
-        defaults_ori = ['180.0', '0.0', '0.0']
+        defaults_ori = ['—', '—', '—']
         self.ori_vars = []
         for i, (lbl, dflt) in enumerate(zip(labels_ori, defaults_ori)):
             ttk.Label(self.root, text=lbl + ' :').grid(
@@ -170,13 +203,22 @@ class PoseGUI:
             var.trace_add('write', lambda *_: self._update_quat_display())
         self._update_quat_display()
 
+        # ── Bouton "Poser actuelle du robot" ───────────────
+        self.refresh_btn = ttk.Button(
+            self.root, text='← Poser actuelle du robot',
+            command=self._on_refresh
+        )
+        self.refresh_btn.grid(row=11, column=0, columnspan=3,
+                              padx=10, pady=(4, 2), sticky='ew')
+        self.refresh_btn.state(['disabled'])  # activé dès la 1ère pose reçue
+
         # ── Durée du mouvement ─────────────────────────────
         ttk.Label(self.root, text='Durée mouvement :').grid(
-            row=11, column=0, sticky='e', **pad)
+            row=12, column=0, sticky='e', **pad)
         self.duration_var = tk.StringVar(value='5.0')
         ttk.Entry(self.root, textvariable=self.duration_var, width=10).grid(
-            row=11, column=1, sticky='w', **pad)
-        ttk.Label(self.root, text='s').grid(row=11, column=2, sticky='w')
+            row=12, column=1, sticky='w', **pad)
+        ttk.Label(self.root, text='s').grid(row=12, column=2, sticky='w')
 
         # ── Bouton Envoyer ─────────────────────────────────
         self.send_btn = ttk.Button(
@@ -184,7 +226,7 @@ class PoseGUI:
             style='Send.TButton',
             command=self._on_send
         )
-        self.send_btn.grid(row=12, column=0, columnspan=3,
+        self.send_btn.grid(row=13, column=0, columnspan=3,
                            padx=10, pady=(14, 6), sticky='ew')
 
         # ── Barre de statut ────────────────────────────────
@@ -192,18 +234,47 @@ class PoseGUI:
         status_lbl = ttk.Label(self.root, textvariable=self.status_var,
                                style='Status.TLabel',
                                relief='sunken', anchor='w')
-        status_lbl.grid(row=13, column=0, columnspan=3,
+        status_lbl.grid(row=14, column=0, columnspan=3,
                         sticky='ew', padx=0, pady=(0, 0))
         self.root.columnconfigure(0, weight=1)
         self.root.columnconfigure(1, weight=1)
 
-        # ── Abonnement aux changements busy ────────────────
+        # ── Abonnements callbacks ──────────────────────────
         self.node.busy_callbacks.append(self._on_busy_changed)
+        self._last_tcp_pose = None
+        self.node.tcp_callbacks.append(self._on_tcp_pose_received)
 
         # ── Fermeture propre ───────────────────────────────
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
     # ── Helpers ────────────────────────────────────────────
+
+    def _on_tcp_pose_received(self, msg: PoseStamped):
+        """Appelé depuis le thread ROS — stocker et débloquer le bouton refresh."""
+        self._last_tcp_pose = msg
+        self.root.after(0, self._enable_refresh)
+
+    def _enable_refresh(self):
+        self.refresh_btn.state(['!disabled'])
+        # Au 1er message reçu, pré-remplir automatiquement les champs
+        if self.pos_vars[0].get() == '—':
+            self._apply_tcp_pose(self._last_tcp_pose)
+
+    def _on_refresh(self):
+        if self._last_tcp_pose is not None:
+            self._apply_tcp_pose(self._last_tcp_pose)
+
+    def _apply_tcp_pose(self, msg: PoseStamped):
+        """Remplir les champs position/orientation depuis la pose TCP."""
+        p = msg.pose.position
+        o = msg.pose.orientation
+        roll, pitch, yaw = quaternion_to_euler_deg(o.x, o.y, o.z, o.w)
+        self.pos_vars[0].set(f'{p.x:.4f}')
+        self.pos_vars[1].set(f'{p.y:.4f}')
+        self.pos_vars[2].set(f'{p.z:.4f}')
+        self.ori_vars[0].set(f'{roll:.2f}')
+        self.ori_vars[1].set(f'{pitch:.2f}')
+        self.ori_vars[2].set(f'{yaw:.2f}')
 
     def _update_quat_display(self):
         try:
