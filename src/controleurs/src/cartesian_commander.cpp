@@ -156,13 +156,12 @@ private:
             return;
         }
 
-        // Extraire world → sonde_tcp
-        // La cible est exprimée en coordonnées monde (frame "world").
-        // La chaîne contient : joints fixes (world→montage) + 7 joints FR3 + joints fixes sonde.
-        // KDL::getNrOfJoints() ne compte que les joints non-fixes → retourne 7.
-        if (!tree.getChain("world", "sonde_tcp", chain_)) {
+        // Extraire fr3_link0 → sonde_tcp
+        // La cible est exprimée en coordonnées de la base du bras (fr3_link0).
+        // Le rail_joint prismatique n'est pas dans cette chaîne → 7 joints mobiles.
+        if (!tree.getChain("fr3_link0", "sonde_tcp", chain_)) {
             RCLCPP_ERROR(get_logger(),
-                "Impossible d'extraire world -> sonde_tcp. "
+                "Impossible d'extraire fr3_link0 -> sonde_tcp. "
                 "Vérifier que srr.xacro est bien chargé.");
             return;
         }
@@ -296,12 +295,14 @@ private:
         const auto& p = msg->pose.position;
         const auto& q = msg->pose.orientation;
 
+        // Pose reçue directement en frame fr3_link0.
+        // La chaîne KDL part de fr3_link0 → pas de conversion nécessaire.
         KDL::Frame target;
         target.p = KDL::Vector(p.x, p.y, p.z);
         target.M = KDL::Rotation::Quaternion(q.x, q.y, q.z, q.w);
 
         RCLCPP_INFO(get_logger(),
-            "Pose cible : pos=(%.3f, %.3f, %.3f)  quat=(%.3f, %.3f, %.3f, %.3f)",
+            "Pose cible (fr3_link0) : pos=(%.3f, %.3f, %.3f)  quat=(%.3f, %.3f, %.3f, %.3f)",
             p.x, p.y, p.z, q.x, q.y, q.z, q.w);
 
         // ── IK — seed : config courante ──────────────────────────────────

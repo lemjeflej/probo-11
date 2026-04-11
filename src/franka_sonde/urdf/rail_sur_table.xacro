@@ -66,14 +66,12 @@
     </inertial>
   </link>
 
-  <joint name="rail_joint" type="$(arg rail_joint_type)">
+  <joint name="rail_joint" type="prismatic">
     <origin xyz="0 -0.85 0" rpy="0 0 0"/>
     <parent link="rail"/>
     <child link="montage"/>
-    <xacro:if value="${'$(arg rail_joint_type)' == 'prismatic'}">
-      <axis xyz="0 1 0"/>
-      <limit lower="0" upper="1.7" effort="1000" velocity="0.5"/>
-    </xacro:if>
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="1.7" effort="1000" velocity="0.5"/>
   </joint>
   
   

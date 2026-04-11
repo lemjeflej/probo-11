@@ -35,10 +35,6 @@
   <xacro:arg name="hand"            default="false"/>
   <xacro:arg name="ee_id"           default="none"/>
   <xacro:arg name="gazebo_effort"   default="false"/>
-  <!-- fixed : la chaîne KDL n'a que 7 joints mobiles (FR3)
-       → JntToGravity reçoit un vecteur de taille 7 = OK
-       prismatic ajouterait un 8e joint → taille mismatch → ERROR -->
-  <xacro:arg name="rail_joint_type" default="fixed"/>
 
   <!-- =============================================
        BRAS FR3
@@ -132,6 +128,26 @@
     <child  link="sonde_tcp"/>
     <origin xyz="0 0 0.2" rpy="0 0 0"/>
   </joint>
+
+  <!-- =============================================
+       RAIL — ros2_control
+       Plugin standard ign_ros2_control (même base que Franka).
+       Bloc séparé → hardware interface indépendante sous le même CM.
+       La chaîne KDL du bras commence à fr3_link0 → ce joint n'est
+       pas vu par l'IK, il est commandé séparément (rail_controller).
+  ============================================= -->
+  <ros2_control name="RailSystem" type="system">
+    <hardware>
+      <plugin>franka_ign_ros2_control/IgnitionSystem</plugin>
+    </hardware>
+    <joint name="rail_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
 
   <!-- RailSystem supprimé :
        mock_components/GenericSystem est incompatible avec

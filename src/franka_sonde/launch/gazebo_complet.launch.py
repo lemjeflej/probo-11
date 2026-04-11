@@ -43,10 +43,9 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper):
     robot_description_config = xacro.process_file(
         srr_xacro,
         mappings={
-            'robot_type':       robot_type_str,
-            'hand':             load_gripper_str,
-            'gazebo_effort':    'false',
-            'rail_joint_type':  'fixed',
+            'robot_type':    robot_type_str,
+            'hand':          load_gripper_str,
+            'gazebo_effort': 'false',
         }
     )
 
