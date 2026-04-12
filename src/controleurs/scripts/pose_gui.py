@@ -87,7 +87,7 @@ class PosePublisherNode(Node):
 
         self.create_subscription(
             Bool,
-            '/cartesian_commander/busy',
+            '/commander/busy',
             self._on_busy,
             10
         )
@@ -148,7 +148,7 @@ class PoseGUI:
         pad = {'padx': 10, 'pady': 5}
 
         # ── Titre ──────────────────────────────────────────
-        ttk.Label(self.root, text='Pose cible du TCP (sonde)',
+        ttk.Label(self.root, text='Pose cible du TCP — frame world',
                   style='Header.TLabel').grid(
             row=0, column=0, columnspan=3, pady=(14, 4))
 

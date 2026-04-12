@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<!--
+  table_rail_visual.xacro
+  =======================
+  Modèle visuel de la table et du rail linéaire.
+  Spawné comme entité indépendante dans Gazebo — aucun ros2_control.
+
+  Le curseur (montage rouge) se positionne à y = -0.85 + rail_position,
+  identique à l'offset du bras dans srr.xacro.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="table_rail">
+
+  <xacro:arg name="rail_position" default="0.0"/>
+
+  <link name="world"/>
+
+  <!-- Table -->
+  <link name="table">
+    <visual>
+      <origin xyz="0 0 0.5"/>
+      <geometry><box size="0.5 2 1"/></geometry>
+      <material name="grey"><color rgba="0.6 0.6 0.6 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.5"/>
+      <geometry><box size="0.5 2 1"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.5"/>
+      <mass value="50.0"/>
+      <inertia ixx="0.001" iyy="0.001" izz="0.001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="world_to_table" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child  link="table"/>
+  </joint>
+
+  <!-- Rail -->
+  <link name="rail">
+    <visual>
+      <origin xyz="0 0 1.01"/>
+      <geometry><box size="0.20 1.9 0.02"/></geometry>
+      <material name="blue"><color rgba="0 0 1 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 1.01"/>
+      <geometry><box size="0.20 1.9 0.02"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 1.01"/>
+      <mass value="5.0"/>
+      <inertia ixx="1.508" iyy="0.0167" izz="1.504" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="table_to_rail" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="table"/>
+    <child  link="rail"/>
+  </joint>
+
+  <!-- Le curseur (montage rouge) est un modèle séparé : rail_curseur.
+       Il est déplacé indépendamment par rail_mover via gz service set_pose. -->
+
+</robot>

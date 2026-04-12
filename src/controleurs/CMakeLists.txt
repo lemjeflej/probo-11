@@ -39,8 +39,17 @@ install(TARGETS
 
 install(PROGRAMS
     scripts/pose_gui.py
-    scripts/rail_state_publisher.py
     DESTINATION lib/${PROJECT_NAME}
+)
+
+# Scripts sans extension .py pour ros2 run / Node(executable=...)
+install(PROGRAMS scripts/rail_mover.py
+    DESTINATION lib/${PROJECT_NAME}
+    RENAME rail_mover
+)
+install(PROGRAMS scripts/mission_coordinator.py
+    DESTINATION lib/${PROJECT_NAME}
+    RENAME mission_coordinator
 )
 
 ament_package()

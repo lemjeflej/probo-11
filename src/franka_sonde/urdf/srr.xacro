@@ -1,24 +1,17 @@
 <?xml version="1.0"?>
 <!--
-  srr.xacro  —  Sonde + Robot + Rail  (version Gazebo)
-  =======================================================
-  Entrée : rail_sur_table.xacro  (table + rail + montage)
-           franka_robot.xacro    (bras FR3)
-  Sortie : modèle complet prêt pour ros_gz_sim
+  srr.xacro  —  Sonde + Robot (version Gazebo, sans rail dans la chaîne)
+  ========================================================================
+  Le bras est ancré directement à world (world_to_arm, fixed).
+  La table/rail sont un modèle visuel séparé (table_rail_visual.urdf).
 
-  Différences par rapport à l'ancien sonde_robot_rail.xacro
-  =========================================================
-  1. franka_robot appelé avec gazebo=true et ros2_control=true
-     → plugin franka_ign_ros2_control/IgnitionSystem activé
-     → interfaces position/velocity/effort exposées à ros2_control
-  2. parent='' dans franka_robot → pas de world_joint Franka
-     On crée nous-mêmes le joint world→table pour fixer l'assemblage
-  3. En mode gazebo, franka_arm ne crée PAS de link "base" :
-     on rattache montage directement à fr3_link0
-  4. Sonde : un seul flip (rpy π 0 0) pour orienter l'outil vers le bas
-     TCP à +z (après flip, +z sonde = -z link8 = vers le bas)
-  5. Rail : mock_components/GenericSystem (rail fixe pour l'instant)
-     Acceptable tant qu'on ignore la position du rail
+  Pourquoi ce découplage :
+    franka_ign_ros2_control/IgnitionSystem construit sa chaîne KDL depuis
+    world jusqu'au tip de l'URDF entier, puis calcule la gravité sur
+    exactement 7 joints (hardcodé). Un joint prismatique dans ce chemin
+    → 8 joints → JntToGravity plante → tous les controllers inactifs.
+    En attachant le bras directement à world, la chaîne est :
+      world → fr3_link0 (fixed) → 7 joints → sonde_tcp  ✓
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fr3">
 
@@ -26,7 +19,6 @@
        INCLUDES
   ============================================= -->
   <xacro:include filename="$(find franka_description)/robots/common/franka_robot.xacro"/>
-  <xacro:include filename="$(find franka_sonde)/urdf/rail_sur_table.xacro"/>
 
   <!-- =============================================
        ARGUMENTS (passés depuis le launch file)
@@ -35,14 +27,12 @@
   <xacro:arg name="hand"            default="false"/>
   <xacro:arg name="ee_id"           default="none"/>
   <xacro:arg name="gazebo_effort"   default="false"/>
-  <xacro:arg name="rail_position"   default="0.0"/>
-
   <!-- =============================================
        BRAS FR3
        gazebo=true   → plugin IgnitionSystem + transmissions
        ros2_control=true → bloc <ros2_control> inclus
        parent=''     → on ne crée PAS de joint world→link0 ici
-                        (on le gère via world→table ci-dessous)
+                        (on le gère via world_to_arm ci-dessous)
   ============================================= -->
   <xacro:franka_robot
     robot_type="$(arg robot_type)"
@@ -62,28 +52,25 @@
   />
 
   <!-- =============================================
-       ANCRAGE MONDE → TABLE
-       Gazebo a besoin d'un lien nommé "world" comme racine
-       pour qu'un modèle soit fixe dans la simulation.
-  ============================================= -->
-  <link name="world"/>
-  <joint name="world_to_table" type="fixed">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <parent link="world"/>
-    <child  link="table"/>
-  </joint>
+       ANCRAGE MONDE → BRAS
+       Le bras est attaché directement à world, sans passer
+       par la table/rail. Cela évite que le plugin Franka
+       (ign_ros2_control_plugin) inclue le joint prismatique
+       dans sa chaîne KDL world→sonde_tcp.
 
-  <!-- =============================================
-       MONTAGE → BRAS
-       Avec gazebo=true dans franka_arm, le link "base" n'est
-       PAS créé (connected_to est mis à vide).
-       On attache directement montage à fr3_link0.
-       L'offset z=1.04 m correspond à :
-         table (1 m) + rail (0.02 m) + carriage (0.02 m) ≈ 1.04 m
+       Offsets (identiques à l'ancienne chaîne world→table→rail→montage→arm) :
+         y = -0.85 + rail_position  (position sur le rail)
+         z = 1.04 m                 (table 1m + rail 0.02m + carriage 0.02m)
+
+       La table et le rail sont un modèle visuel séparé (table_rail_visual.urdf).
   ============================================= -->
-  <joint name="montage_to_arm" type="fixed">
+  <!-- world_to_arm : Y = 0 ici, le modèle est spawné à y = -0.85 + rail_position
+       dans Gazebo. rail_mover déplace le modèle entier en Y lors d'un changement
+       de position rail → aucun offset Y hardcodé dans l'URDF. -->
+  <link name="world"/>
+  <joint name="world_to_arm" type="fixed">
     <origin xyz="0 0 1.04" rpy="0 0 0"/>
-    <parent link="montage"/>
+    <parent link="world"/>
     <child  link="fr3_link0"/>
   </joint>
 
@@ -130,7 +117,5 @@
     <origin xyz="0 0 0.2" rpy="0 0 0"/>
   </joint>
 
-  <!-- rail_joint injecté dans FrankaHardwareInterface via le launch file
-       (même plugin IgnitionSystem, seule solution compatible Gazebo) -->
 
 </robot>

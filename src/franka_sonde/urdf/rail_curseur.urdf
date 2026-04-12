@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!--
+  rail_curseur.urdf
+  =================
+  Curseur rouge (carriage) qui glisse sur le rail.
+  Spawné comme entité séparée, déplacé par rail_mover via gz service set_pose.
+  Position de spawn : x=0, y=-0.85+rail_position, z=1.03
+-->
+<robot name="rail_curseur">
+  <link name="base">
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry><box size="0.2 0.2 0.02"/></geometry>
+      <material name="red"><color rgba="1 0 0 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry><box size="0.2 0.2 0.02"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.00337" iyy="0.00337" izz="0.00667" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+</robot>

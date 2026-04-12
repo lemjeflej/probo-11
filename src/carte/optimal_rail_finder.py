@@ -183,7 +183,7 @@ def plot_results(results, target_world):
 # Format : (x, y, z) en mètres.
 # Exemple : face au robot au milieu du rail, à hauteur d'abdomen.
 if __name__ == "__main__":
-    TARGET_WORLD = (0.35, 0.7, 1.6)   # (x, y, z) en frame world
+    TARGET_WORLD = (0.3069, 0.0, 1.8303)   # (x, y, z) en frame world
 
     best, results = find_optimal_rail(TARGET_WORLD, verbose=True)
     plot_results(results, TARGET_WORLD)

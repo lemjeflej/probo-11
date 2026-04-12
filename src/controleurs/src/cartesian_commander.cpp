@@ -48,6 +48,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/float64.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 #include "control_msgs/action/follow_joint_trajectory.hpp"
@@ -104,9 +105,17 @@ public:
             "/joint_states", 10,
             std::bind(&CartesianCommander::onJointState, this, std::placeholders::_1));
 
+        // Reçoit les poses en frame fr3_link0 depuis mission_coordinator
         sub_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-            "/target_pose", 5,
+            "/target_pose_robot", 5,
             std::bind(&CartesianCommander::onTargetPose, this, std::placeholders::_1));
+
+        // Mise à jour dynamique de la position rail (publiée par rail_mover)
+        sub_rail_pos_ = this->create_subscription<std_msgs::msg::Float64>(
+            "/current_rail_position", 10,
+            [this](const std_msgs::msg::Float64::SharedPtr msg) {
+                rail_position_ = msg->data;
+            });
 
         // ── Client d'action ─────────────────────────────────────────────
         action_client_ = rclcpp_action::create_client<FollowJT>(
@@ -295,12 +304,18 @@ private:
         double qx, qy, qz, qw;
         tcp.M.GetQuaternion(qx, qy, qz, qw);
 
+        // Publier en frame world : y += (-0.85 + rail_position), z += 1.04
+        // Permet au GUI d'afficher des coordonnées world cohérentes avec
+        // ce qu'attend mission_coordinator sur /target_pose.
+        constexpr double Y_BASE   = -0.85;
+        constexpr double Z_OFFSET =  1.04;
+
         geometry_msgs::msg::PoseStamped ps;
         ps.header.stamp    = this->get_clock()->now();
-        ps.header.frame_id = "fr3_link0";
+        ps.header.frame_id = "world";
         ps.pose.position.x = tcp.p.x();
-        ps.pose.position.y = tcp.p.y();
-        ps.pose.position.z = tcp.p.z();
+        ps.pose.position.y = tcp.p.y() + (Y_BASE + rail_position_);
+        ps.pose.position.z = tcp.p.z() + Z_OFFSET;
         ps.pose.orientation.x = qx;
         ps.pose.orientation.y = qy;
         ps.pose.orientation.z = qz;
@@ -493,6 +508,7 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr    sub_joints_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  sub_pose_;
+    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr           sub_rail_pos_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr                 pub_busy_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr     pub_tcp_pose_;
     rclcpp_action::Client<FollowJT>::SharedPtr action_client_;

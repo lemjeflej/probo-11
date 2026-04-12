@@ -3,14 +3,10 @@
 # Séquence de lancement :
 #   1. Gazebo vide
 #   2. robot_state_publisher  (srr.xacro → /robot_description)
-#   3. spawn du robot dans Gazebo
+#   3. spawn robot + table_rail (xacro processé avec rail_position) + patient
 #   4. joint_state_broadcaster activé
 #   5. fr3_arm_controller activé  (JointTrajectoryController position)
-#   6. rail_state_publisher démarré (publie rail_joint sur /joint_states)
-#   7. cartesian_commander démarré
-#      → envoie la trajectoire vers la pose "ready" au démarrage
-#      → attend ensuite des poses sur /target_pose
-#      → commande le rail via /target_rail_pos (std_msgs/Float64)
+#   6. cartesian_commander démarré (pose ready + écoute /target_pose)
 
 import os
 import xacro
@@ -23,13 +19,71 @@ from launch.actions import (
     ExecuteProcess,
     IncludeLaunchDescription,
     OpaqueFunction,
-    RegisterEventHandler,
     TimerAction,
 )
-from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def get_table_rail_description(context: LaunchContext, rail_position):
+    rail_position_str = context.perform_substitution(rail_position)
+
+    table_rail_xacro = os.path.join(
+        get_package_share_directory('franka_sonde'),
+        'urdf', 'table_rail_visual.xacro'
+    )
+    xml = xacro.process_file(
+        table_rail_xacro,
+        mappings={'rail_position': rail_position_str}
+    ).toxml()
+
+    return [Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=['-string', xml, '-name', 'table_rail'],
+        output='screen',
+        name='spawn_table_rail',
+    )]
+
+
+def get_robot_spawn_pose(context: LaunchContext, rail_position):
+    """Calcule la pose de spawn du robot : y = -0.85 + rail_position."""
+    rail_pos_str = context.perform_substitution(rail_position)
+    y = -0.85 + float(rail_pos_str)
+    return [Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-topic', '/robot_description',
+            '-name',  'probo11',
+            '-y',     f'{y:.4f}',
+        ],
+        output='screen',
+        name='spawn_robot',
+    )]
+
+
+def get_curseur_spawn(context: LaunchContext, rail_position):
+    """Calcule la pose de spawn du curseur rouge : y = -0.85 + rail_position, z = 1.03."""
+    rail_pos_str = context.perform_substitution(rail_position)
+    y = -0.85 + float(rail_pos_str)
+    curseur_urdf = os.path.join(
+        get_package_share_directory('franka_sonde'),
+        'urdf', 'rail_curseur.urdf'
+    )
+    return [Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-file', curseur_urdf,
+            '-name', 'rail_curseur',
+            '-y',    f'{y:.4f}',
+            '-z',    '1.03',
+        ],
+        output='screen',
+        name='spawn_curseur',
+    )]
 
 
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, rail_position):
@@ -111,11 +165,19 @@ def generate_launch_description():
         launch_arguments={'gz_args': 'empty.sdf -r'}.items(),
     )
 
-    spawn_robot = Node(
-        package='ros_gz_sim',
-        executable='create',
-        arguments=['-topic', '/robot_description', '-name', 'probo11'],
-        output='screen',
+    spawn_robot = OpaqueFunction(
+        function=get_robot_spawn_pose,
+        args=[rail_position]
+    )
+
+    spawn_curseur = OpaqueFunction(
+        function=get_curseur_spawn,
+        args=[rail_position]
+    )
+
+    spawn_table_rail = OpaqueFunction(
+        function=get_table_rail_description,
+        args=[rail_position]
     )
 
     patient_urdf = os.path.join(
@@ -141,6 +203,12 @@ def generate_launch_description():
         output='screen'
     )
 
+    import os as _os
+    carte_results = _os.path.join(
+        _os.path.expanduser('~'),
+        'robotics', 'probo-11', 'src', 'carte', 'results'
+    )
+
     cartesian_commander = TimerAction(
         period=3.0,
         actions=[Node(
@@ -149,11 +217,32 @@ def generate_launch_description():
             name='cartesian_commander',
             output='screen',
             parameters=[{
-                'move_duration':  5.0,
-                'ik_max_iter':    200,
-                'ik_tolerance':   1e-5,
-                'rail_position':  rail_position,
+                'move_duration': 5.0,
+                'ik_max_iter':   200,
+                'ik_tolerance':  1e-5,
             }],
+        )]
+    )
+
+    rail_mover = TimerAction(
+        period=3.0,
+        actions=[Node(
+            package='controleurs',
+            executable='rail_mover',
+            name='rail_mover',
+            output='screen',
+            parameters=[{'initial_rail_position': rail_position}],
+        )]
+    )
+
+    mission_coordinator = TimerAction(
+        period=4.0,
+        actions=[Node(
+            package='controleurs',
+            executable='mission_coordinator',
+            name='mission_coordinator',
+            output='screen',
+            parameters=[{'carte_results_dir': carte_results}],
         )]
     )
 
@@ -164,23 +253,12 @@ def generate_launch_description():
         gazebo,
         robot_state_publisher,
         spawn_robot,
+        spawn_table_rail,
+        spawn_curseur,
         spawn_patient,
-        RegisterEventHandler(
-            event_handler=OnProcessExit(
-                target_action=spawn_robot,
-                on_exit=[load_jsb],
-            )
-        ),
-        RegisterEventHandler(
-            event_handler=OnProcessExit(
-                target_action=load_jsb,
-                on_exit=[load_arm_ctrl],
-            )
-        ),
-        RegisterEventHandler(
-            event_handler=OnProcessExit(
-                target_action=load_arm_ctrl,
-                on_exit=[cartesian_commander],
-            )
-        ),
+        rail_mover,
+        mission_coordinator,
+        TimerAction(period=8.0,  actions=[load_jsb]),
+        TimerAction(period=10.0, actions=[load_arm_ctrl]),
+        TimerAction(period=13.0, actions=[cartesian_commander]),
     ])
