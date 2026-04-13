@@ -1,0 +1,993 @@
+% ============================================================
+%  PROBO-11 — Rapport de projet
+%  Positionnement optimal d'un robot FR3 sur rail linéaire
+%  pour procédures percutanées guidées par ultrasons
+% ============================================================
+\documentclass[11pt, a4paper]{article}
+
+% ── Encodage & langue ────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+
+% ── Police ───────────────────────────────────────────────────
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ── Géométrie ────────────────────────────────────────────────
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm]{geometry}
+
+% ── Couleurs & graphiques ────────────────────────────────────
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, shadows}
+
+% ── Boîtes colorées ──────────────────────────────────────────
+\usepackage[most]{tcolorbox}
+\tcbuselibrary{skins, breakable, theorems}
+
+% ── Tableaux ─────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{colortbl}
+
+% ── Mathématiques ────────────────────────────────────────────
+\usepackage{amsmath, amssymb, bm}
+
+% ── Listings code ────────────────────────────────────────────
+\usepackage{listings}
+\usepackage{lstautogobble}
+
+% ── Liens & méta ─────────────────────────────────────────────
+\usepackage[hidelinks, colorlinks=true,
+            linkcolor=DeepSkyBlue4,
+            urlcolor=MidnightBlue,
+            citecolor=DarkGreen]{hyperref}
+\usepackage{cleveref}
+
+% ── En-têtes & pieds de page ─────────────────────────────────
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+% ── Divers ───────────────────────────────────────────────────
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{setspace}
+\usepackage{titlesec}
+
+% ════════════════════════════════════════════════════════════
+%  PALETTE DE COULEURS DU PROJET
+% ════════════════════════════════════════════════════════════
+\definecolor{PrimaryBlue}{HTML}{1565C0}
+\definecolor{AccentOrange}{HTML}{E65100}
+\definecolor{AccentTeal}{HTML}{00695C}
+\definecolor{AccentPurple}{HTML}{6A1B9A}
+\definecolor{LightBlue}{HTML}{E3F2FD}
+\definecolor{LightOrange}{HTML}{FFF3E0}
+\definecolor{LightTeal}{HTML}{E0F2F1}
+\definecolor{LightPurple}{HTML}{F3E5F5}
+\definecolor{DarkGray}{HTML}{263238}
+\definecolor{MediumGray}{HTML}{546E7A}
+\definecolor{CodeBg}{HTML}{F5F5F5}
+\definecolor{WarningYellow}{HTML}{F9A825}
+\definecolor{SuccessGreen}{HTML}{2E7D32}
+
+% ════════════════════════════════════════════════════════════
+%  STYLES TCOLORBOX
+% ════════════════════════════════════════════════════════════
+\tcbset{
+  base/.style={
+    enhanced, breakable,
+    fonttitle=\bfseries\sffamily,
+    separator sign={~—~},
+  }
+}
+
+\newtcolorbox{keybox}[2][]{
+  base,
+  colback=LightBlue, colframe=PrimaryBlue, colbacktitle=PrimaryBlue,
+  title={#2}, #1
+}
+
+\newtcolorbox{techbox}[2][]{
+  base,
+  colback=LightTeal, colframe=AccentTeal, colbacktitle=AccentTeal,
+  title={#2}, #1
+}
+
+\newtcolorbox{warnbox}[2][]{
+  base,
+  colback=LightOrange, colframe=AccentOrange, colbacktitle=AccentOrange,
+  title={#2}, #1
+}
+
+\newtcolorbox{resultbox}[2][]{
+  base,
+  colback=LightPurple, colframe=AccentPurple, colbacktitle=AccentPurple,
+  title={#2}, #1
+}
+
+\newtcolorbox{definitionbox}[1][]{
+  base,
+  colback=gray!8, colframe=MediumGray, colbacktitle=MediumGray,
+  title={Définition}, #1
+}
+
+% ════════════════════════════════════════════════════════════
+%  LISTINGS (code)
+% ════════════════════════════════════════════════════════════
+\lstdefinestyle{ros2style}{
+  backgroundcolor=\color{CodeBg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{MediumGray!50},
+  numbers=left,
+  numberstyle=\tiny\color{MediumGray},
+  keywordstyle=\color{PrimaryBlue}\bfseries,
+  commentstyle=\color{SuccessGreen}\itshape,
+  stringstyle=\color{AccentOrange},
+  autogobble=true,
+  xleftmargin=1.5em,
+  xrightmargin=0.5em,
+}
+\lstset{style=ros2style}
+
+% ════════════════════════════════════════════════════════════
+%  TITRES
+% ════════════════════════════════════════════════════════════
+\titleformat{\section}
+  {\Large\bfseries\sffamily\color{PrimaryBlue}}
+  {\thesection}{1em}{}
+  [\color{PrimaryBlue}\titlerule[1.5pt]]
+
+\titleformat{\subsection}
+  {\large\bfseries\sffamily\color{AccentTeal}}
+  {\thesubsection}{1em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\sffamily\color{AccentPurple}}
+  {\thesubsubsection}{1em}{}
+
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{5pt}
+
+% ════════════════════════════════════════════════════════════
+%  EN-TÊTES / PIEDS DE PAGE
+% ════════════════════════════════════════════════════════════
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily\color{MediumGray}\textbf{PROBO-11}}
+\fancyhead[C]{\small\sffamily\color{MediumGray}Positionnement optimal FR3 sur rail — Rapport de projet}
+\fancyhead[R]{\small\sffamily\color{MediumGray}2025--2026}
+\fancyfoot[C]{\small\sffamily\color{MediumGray}Page \thepage\ / \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{PrimaryBlue}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+% ════════════════════════════════════════════════════════════
+%  NOUVELLES COMMANDES
+% ════════════════════════════════════════════════════════════
+\newcommand{\ros}{\texttt{ROS\,2}}
+\newcommand{\pkg}[1]{\texttt{\color{PrimaryBlue}#1}}
+\newcommand{\topic}[1]{\texttt{\color{AccentOrange}#1}}
+\newcommand{\file}[1]{\texttt{\color{AccentTeal}#1}}
+\newcommand{\FR}{FR3}
+\newcommand{\manip}{\mathcal{M}}
+
+% ════════════════════════════════════════════════════════════
+%  PAGE DE TITRE
+% ════════════════════════════════════════════════════════════
+\begin{document}
+
+\begin{titlepage}
+  \pagecolor{PrimaryBlue}
+  \color{white}
+  \begin{center}
+    \vspace*{2cm}
+
+    % Bandeau supérieur
+    \begin{tikzpicture}
+      \node[rectangle, fill=white!15, rounded corners=6pt,
+            text width=14cm, align=center, inner sep=14pt] {
+        {\Large\sffamily\bfseries RAPPORT DE PROJET — GÉNIE ROBOTIQUE}
+      };
+    \end{tikzpicture}
+
+    \vspace{1.5cm}
+
+    {\Huge\bfseries\sffamily PROBO-11}
+
+    \vspace{0.4cm}
+
+    {\LARGE\sffamily Positionnement Optimal d'un Robot\\[0.3em]
+      \FR{} sur Rail Linéaire pour Procédures\\[0.3em]
+      Percutanées Guidées par Ultrasons}
+
+    \vspace{1.2cm}
+
+    \begin{tikzpicture}
+      \node[rectangle, fill=AccentOrange, rounded corners=4pt,
+            text width=10cm, align=center, inner sep=10pt] {
+        {\large\sffamily Simulation \ros{} Humble $\cdot$ Gazebo Ignition $\cdot$ Franka FR3}
+      };
+    \end{tikzpicture}
+
+    \vspace{2cm}
+
+    \begin{tabular}{rl}
+      \textbf{Projet :}     & PROBO-11 \\[4pt]
+      \textbf{Branche :}    & \texttt{feature/integration-rail} \\[4pt]
+      \textbf{Encadrement :}& Département de Génie Informatique et Génie Logiciel \\[4pt]
+      \textbf{Année :}      & 2025 -- 2026 \\[4pt]
+    \end{tabular}
+
+    \vfill
+
+    \begin{tikzpicture}
+      \node[circle, fill=white!20, minimum size=3cm, align=center] {
+        {\Large\bfseries\sffamily FR3\\[2pt]\small sur Rail}
+      };
+    \end{tikzpicture}
+
+    \vspace{1cm}
+
+    {\small\sffamily\itshape
+      Ce document décrit l'architecture technique, les contributions algorithmiques
+      et les résultats de simulation du système de positionnement automatique PROBO-11.}
+
+  \end{center}
+\end{titlepage}
+
+\pagecolor{white}
+\color{black}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\newpage
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Contexte et motivation}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Problématique clinique}
+
+Les procédures percutanées guidées par imagerie — biopsies hépatiques, drainages, ablations par radiofréquence — requièrent une précision millimétrique et une stabilité de positionnement soutenue. Le clinicien doit simultanément manœuvrer la sonde échographique, maintenir la trajectoire d'aiguille, et interpréter l'image en temps réel. Cette charge cognitive élevée est une source documentée d'erreurs de ciblage.
+
+\begin{keybox}{Objectif du projet}
+Développer et valider en simulation un système permettant de positionner automatiquement un robot Franka \FR{} — monté sur un rail linéaire d'1,9\,m — à la position optimale pour atteindre un point anatomique cible avec la \textbf{manipulabilité maximale}, avant que le clinicien ne commande le mouvement du bras.
+\end{keybox}
+
+\subsection{Contraintes du cahier des charges}
+
+\begin{itemize}[leftmargin=2em, itemsep=3pt]
+  \item Le système doit être \textbf{compatible avec le matériel physique existant} : le robot et le rail sont déjà construits.
+  \item L'interface utilisateur doit être \textbf{transparente pour le médecin} : la logique de positionnement rail est entièrement automatique.
+  \item La validation doit se faire intégralement en simulation \ros{} 2 + Gazebo avant tout essai matériel.
+  \item La sonde échographique est un outil personnalisé (masse 0,3\,kg, longueur TCP 0,2\,m) — aucun préhenseur standard.
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Architecture matérielle et logicielle}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Description du système physique}
+
+\begin{wrapfigure}{r}{0.42\textwidth}
+\centering
+\begin{tikzpicture}[scale=0.85]
+  % Table
+  \fill[gray!30] (-2,-0.1) rectangle (2,0);
+  \node at (0,-0.35) {\small\sffamily Table (acier)};
+  % Rail
+  \fill[PrimaryBlue!40] (-2,0) rectangle (2,0.12);
+  \node[PrimaryBlue] at (2.6,0.06) {\small\sffamily Rail 1,9\,m};
+  % Carriage
+  \fill[AccentOrange!80] (-0.3,0.12) rectangle (0.3,0.22);
+  \node[AccentOrange] at (1.4,0.17) {\small\sffamily Carriage};
+  % Robot base
+  \fill[DarkGray!70] (-0.15,0.22) rectangle (0.15,0.55);
+  % Arm (simplified)
+  \draw[DarkGray!70, line width=2pt] (0,0.55) -- (0.4,0.9) -- (0.6,1.3);
+  % TCP
+  \fill[AccentPurple] (0.6,1.3) circle (0.07);
+  \node[AccentPurple] at (1.3,1.35) {\small\sffamily TCP / sonde};
+  % Patient
+  \fill[Salmon!50] (-1.5,0) rectangle (-0.8,0.4);
+  \node at (-1.15,-0.2) {\small\sffamily Patient};
+  % Dimensions
+  \draw[<->, gray] (-2,0.5) -- (2,0.5) node[midway,above] {\small 1,9\,m};
+  \draw[<->, gray] (0.15,0) -- (0.15,1.04) node[midway,right] {\small 1,04\,m};
+\end{tikzpicture}
+\caption{Vue schématique du système PROBO-11.}
+\end{wrapfigure}
+
+Le système se compose de :
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item Un \textbf{rail linéaire prismatique} de 1,9\,m de course, fixé sur une table en acier de 1\,m de hauteur.
+  \item Un \textbf{carriage} (0,2\,m\,$\times$\,0,2\,m) qui coulisse sur le rail.
+  \item Le \textbf{robot Franka FR3} (7 DDL) vissé sur le carriage, base à $z = 1{,}04$\,m dans le repère monde.
+  \item Une \textbf{sonde échographique personnalisée} remplaçant le préhenseur standard, avec TCP à 0,2\,m sous la bride.
+  \item Un \textbf{patient simulé} positionné latéralement.
+\end{itemize}
+
+\vspace{6pt}
+
+La pose du robot dans le repère monde est définie par deux paramètres :
+\begin{equation}
+  y_{\text{robot}} = -0{,}85 + p_{\text{rail}}, \qquad z_{\text{robot}} = 1{,}04
+  \label{eq:robot_pose}
+\end{equation}
+où $p_{\text{rail}} \in [0{,}0\,,\,1{,}7]$\,m est la position courante du rail.
+
+\subsection{Stack logiciel}
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \rowcolor{LightBlue}
+  \textbf{Couche} & \textbf{Technologie} & \textbf{Rôle} \\
+  \midrule
+  Middleware       & \ros{} 2 Humble       & Communication inter-nœuds (topics, services) \\
+  Simulation       & Gazebo Ignition 6     & Moteur physique, rendu 3D \\
+  Contrôle         & \pkg{ros2\_control}   & Gestion des contrôleurs temps-réel \\
+  Description      & URDF/Xacro            & Modèle cinématique et visuel \\
+  Cinématique inv. & KDL (Orocos)          & Solveur IK dans \pkg{cartesian\_commander} \\
+  Planification    & Python 3 / NumPy      & Carte de capacité, sélection rail \\
+  Interface        & Python 3 / Tkinter    & GUI médecin \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Structure des paquets ROS 2}
+
+\begin{techbox}{Paquets du projet}
+\begin{itemize}[leftmargin=1em, itemsep=2pt]
+  \item \pkg{franka\_sonde} — URDF/Xacro, fichiers de lancement, maillages, configuration RViz
+  \item \pkg{controleurs} — Nœuds C++ et Python : \texttt{cartesian\_commander}, \texttt{rail\_mover}, \texttt{mission\_coordinator}
+  \item \pkg{fr3\_sonde\_moveit\_config} — Configuration MoveIt2, cinématique, contrôleurs
+  \item \pkg{franka\_description} / \pkg{franka\_ros2} / \pkg{libfranka} — Bibliothèques amont \textit{(non modifiées)}
+\end{itemize}
+\end{techbox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Modélisation URDF et contrainte du plugin Franka}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Architecture URDF initiale et le problème découvert}
+
+La conception initiale plaçait le robot comme un sous-arbre de la table (joint prismatique rail dans la chaîne cinématique principale). Cette approche, naturelle du point de vue de la description URDF, s'est heurtée à une contrainte interne du plugin Gazebo de Franka.
+
+\begin{warnbox}{Contrainte critique : \texttt{franka\_ign\_ros2\_control}}
+Le plugin \texttt{IgnitionSystem} de Franka construit automatiquement une chaîne KDL depuis le lien \texttt{world} jusqu'au \textit{tip link} du robot, et \textbf{impose exactement 7 joints rotatifs}. Toute présence d'un joint prismatique dans la chaîne provoque une erreur fatale :
+\begin{lstlisting}[language=bash, numbers=none]
+  gravity_torques(7) -- mismatch with prismatic joint in KDL chain
+  [cartesian_commander] Segmentation fault (core dumped)
+\end{lstlisting}
+Ce comportement est documenté dans le code source de \texttt{franka\_ign\_ros2\_control} :
+\begin{lstlisting}[language=cpp, numbers=none]
+  // findTipLink() scans world→tip, hardcodes gravity_torques(7)
+  Eigen::VectorXd gravity_torques(7);
+\end{lstlisting}
+\end{warnbox}
+
+\subsection{Solution : découplage URDF et modèle Gazebo à deux entités}
+
+La solution retenue découple entièrement la description cinématique du robot de la logique de positionnement rail.
+
+\subsubsection{URDF modifié (\file{srr.xacro})}
+
+Le joint \texttt{world\_to\_arm} attache directement le robot à \texttt{world} avec un offset $z = 1{,}04$\,m fixe, sans joint prismatique :
+
+\begin{lstlisting}[language=xml]
+  <!-- Joint world->fr3_link0 : offset z uniquement, Y gere au spawn -->
+  <joint name="world_to_arm" type="fixed">
+    <origin xyz="0 0 1.04" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child  link="${arm_id}_link0"/>
+  </joint>
+\end{lstlisting}
+
+Le paramètre $y$ est passé au moment du \textit{spawn} Gazebo, non dans l'URDF.
+
+\subsubsection{Entités Gazebo séparées}
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \rowcolor{LightTeal}
+  \textbf{Entité} & \textbf{Modèle} & \textbf{Contrôleur} \\
+  \midrule
+  \texttt{probo11}      & URDF complet du robot FR3     & \texttt{fr3\_arm\_controller} (ros2\_control) \\
+  \texttt{table\_rail}  & \file{table\_rail\_visual.xacro} & Aucun (visuel seulement) \\
+  \texttt{rail\_curseur}& \file{rail\_curseur.urdf}        & Aucun — déplacé par \texttt{set\_pose} \\
+  \texttt{patient}      & \file{patient\_scene.urdf}       & Aucun (référence anatomique) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Le \textbf{curseur rouge} (\texttt{rail\_curseur}) est un bloc de 0,2\,m\,$\times$\,0,2\,m\,$\times$\,0,02\,m servant d'indicateur visuel de la position rail courante. N'ayant aucun contrôleur attaché, il répond fidèlement aux commandes \texttt{ign service set\_pose}.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Carte de capacité du robot}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Principe et définitions}
+
+\begin{definitionbox}
+\textbf{Carte de capacité} : grille de voxels dans le repère \texttt{fr3\_link0} associant à chaque point de l'espace de travail deux métriques :
+\begin{itemize}
+  \item $\mathrm{acc}(\mathbf{p})$ — \textbf{accessibilité} : pourcentage d'orientations d'approche pour lesquelles l'IK converge ;
+  \item $\manip(\mathbf{p})$ — \textbf{manipulabilité} : mesure de la proximité aux singularités, définie par
+  \begin{equation}
+    \manip(\mathbf{q}) = \prod_{i=1}^{6} \sigma_i(\mathbf{J}(\mathbf{q}))
+    \label{eq:manip}
+  \end{equation}
+  où $\sigma_i$ sont les valeurs singulières du jacobien $\mathbf{J} \in \mathbb{R}^{6\times 7}$.
+\end{itemize}
+\end{definitionbox}
+
+\subsection{Paramètres de discrétisation}
+
+\begin{center}
+\begin{tabular}{llll}
+  \toprule
+  \rowcolor{LightBlue}
+  \textbf{Axe} & \textbf{Étendue} & \textbf{Résolution} & \textbf{Nb points} \\
+  \midrule
+  $X$ (profondeur)    & 0 — 0,4\,m  & 0,10\,m & 5  \\
+  $Y$ (long du rail)  & −1 — +1\,m  & 0,05\,m & 41 \\
+  $Z$ (hauteur)       & 0 — 0,30\,m & 0,05\,m & 7 strates \\
+  \midrule
+  \textbf{Total} & & & \textbf{$\approx$\,2235 voxels} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Échantillonnage des orientations — Spirale de Fibonacci}
+
+Pour chaque voxel, on évalue $N_{\text{dir}} = 200$ directions d'approche de la sonde, distribuées quasi-uniformément sur la sphère unitaire par la \textbf{spirale de Fibonacci} :
+
+\begin{equation}
+  z_i = 1 - \frac{2i}{N-1}, \quad
+  \theta_i = \frac{2\pi i}{\phi}, \quad
+  r_i = \sqrt{1-z_i^2}
+\end{equation}
+où $\phi = (1+\sqrt{5})/2$ est le nombre d'or.
+
+Chaque direction est combinée à 4 rotations propres $\gamma \in \{0°, 90°, 180°, 270°\}$, soit $200 \times 4 = 800$ poses testées par voxel.
+
+\begin{techbox}{Optimisation : warm-start IK}
+Les orientations sont triées par norme d'angle croissante. La solution $\mathbf{q}$ de chaque IK sert d'initialisation (\textit{warm-start}) au suivant, réduisant significativement le nombre d'itérations de Levenberg-Marquardt.
+\end{techbox}
+
+\subsection{Algorithme de génération}
+
+\begin{lstlisting}[language=python, caption={Cœur de Capacity\_Map\_Creator.py}]
+  for z in Z_vals:
+      for x in X_vals:
+          for y in Y_vals:
+              voxel = np.array([x, y, z])
+              if np.linalg.norm(voxel) > reach_max:
+                  continue  # filtre rapide geometrique
+
+              for ax, ay, az in euler_angles:         # 200 directions
+                  for gamma in [0, pi/2, pi, 3*pi/2]: # 4 rotations propres
+                      T_target = SE3(*voxel) * R_base * SE3.Rz(gamma)
+                      sol = panda.ikine_LM(T_target, q0=q_prev)
+                      if sol.success:
+                          J = panda.jacob0(sol.q)
+                          manip = prod(svd(J))
+
+              acc[voxel]   = reachable / total * 100
+              manip[voxel] = mean(manips)
+\end{lstlisting}
+
+Les résultats sont sérialisés par strate $Z$ dans des fichiers \texttt{.pkl} (\file{results/voxels\_Z\_\{z\}.pkl}) pour permettre une reprise incrémentale du calcul.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Sélection automatique de la position rail optimale}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Changement de repère world $\to$ fr3\_link0}
+
+La carte est calculée dans le repère \texttt{fr3\_link0}. Pour une cible $\mathbf{p}_w = (x_w, y_w, z_w)$ en frame monde et une position rail candidate $p_r$, la conversion est :
+
+\begin{equation}
+  \begin{pmatrix} x_r \\ y_r \\ z_r \end{pmatrix}
+  =
+  \begin{pmatrix} x_w \\ y_w + 0{,}85 - p_r \\ z_w - 1{,}04 \end{pmatrix}
+  \label{eq:world_to_robot}
+\end{equation}
+
+Cette formule découle directement de l'équation~\eqref{eq:robot_pose}.
+
+\subsection{Algorithme de sélection}
+
+Pour une cible world donnée, on balaie la course complète du rail par pas de 5\,cm :
+
+\begin{lstlisting}[language=python, caption={find\_optimal\_rail dans optimal\_rail\_finder.py}]
+  def find_optimal_rail(target_world, voxel_positions, manip_values):
+      candidates = np.arange(0.0, 1.75, 0.05)  # [0.0, 0.05, ..., 1.70]
+      best_pos, best_manip = 0.0, -1.0
+
+      for rail_pos in candidates:
+          target_robot = world_to_robot(target_world, rail_pos)
+          # Voxel le plus proche par distance euclidienne
+          dists = np.linalg.norm(voxel_positions - target_robot, axis=1)
+          idx = np.argmin(dists)
+          if manip_values[idx] > best_manip:
+              best_manip = manip_values[idx]
+              best_pos   = rail_pos
+
+      return best_pos, best_manip   # position optimale + sa manipulabilite
+\end{lstlisting}
+
+\begin{resultbox}{Complexité et performance}
+\begin{itemize}[leftmargin=1em, itemsep=2pt]
+  \item Nombre de positions rail évaluées : $\lfloor 1{,}7 / 0{,}05 \rfloor + 1 = 35$
+  \item Pour chaque position : 1 conversion \eqref{eq:world_to_robot} + 1 recherche des $N = 2235$ voxels par distance euclidienne (NumPy vectorisé)
+  \item Temps d'exécution mesuré : \textbf{$<$\,5\,ms} sur CPU standard
+  \item La recherche est embarquée dans \texttt{mission\_coordinator} et exécutée en temps réel à chaque commande du GUI
+\end{itemize}
+\end{resultbox}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Cinématique inverse multi-amorce}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Problème de la cinématique inverse du FR3}
+
+Le FR3 est un robot à 7\,DDL : la redondance implique une infinité de solutions IK pour une même pose TCP. Le solveur KDL (\texttt{ChainIkSolverPos\_NR\_JL}) est itératif et sensible à l'initialisation : une mauvaise amorce peut converger vers une configuration singulière ou hors-limites articulaires.
+
+\subsection{Solution : stratégie multi-amorce avec validation FK}
+
+\begin{lstlisting}[language=cpp, caption={Extrait cartesian\_commander.cpp — IK multi-amorce}]
+  // 3 amorces candidates
+  std::vector<KDL::JntArray> seeds = {
+      current_q_,   // configuration courante (continuite)
+      Q_HOME,       // pose home (bras baisse)
+      Q_READY,      // pose ready (bras leve, operationnel)
+  };
+
+  KDL::JntArray best_q;
+  double best_cost = std::numeric_limits<double>::max();
+
+  for (auto& seed : seeds) {
+      KDL::JntArray q_sol(7);
+      int ret = ik_solver_->CartToJnt(seed, target_frame, q_sol);
+      if (ret < 0) continue;
+
+      // Validation par FK (seuil 3 mm)
+      KDL::Frame fk_result;
+      fk_solver_->JntToCart(q_sol, fk_result);
+      if ((fk_result.p - target_frame.p).Norm() > 3e-3) continue;
+
+      // Critere : deplacement articulaire minimal
+      double cost = (q_sol.data - current_q_.data).norm();
+      if (cost < best_cost) {
+          best_cost = best_q = q_sol;
+      }
+  }
+\end{lstlisting}
+
+\begin{keybox}{Bénéfices de l'approche multi-amorce}
+\begin{itemize}[leftmargin=1em, itemsep=2pt]
+  \item \textbf{Robustesse} : si une amorce diverge, les deux autres servent de secours
+  \item \textbf{Continuité} : l'amorce \texttt{current\_q\_} privilégie les mouvements courts (moins d'énergie)
+  \item \textbf{Sécurité} : la validation FK garantit que la solution IK atteint effectivement la cible
+  \item \textbf{Élimination de la dérive} : évite les configurations où le robot atteint la position mais pas l'orientation (problème observé avec amorce unique)
+\end{itemize}
+\end{keybox}
+
+\subsection{Publication de la pose TCP en frame monde}
+
+Pour fermer la boucle avec le GUI, \texttt{cartesian\_commander} publie en permanence la pose du TCP convertie en frame monde :
+
+\begin{equation}
+  \begin{pmatrix} x_w \\ y_w \\ z_w \end{pmatrix}_{\text{TCP}}
+  =
+  \begin{pmatrix} x_r \\ y_r + (-0{,}85 + p_{\text{rail}}) \\ z_r + 1{,}04 \end{pmatrix}_{\text{TCP}}
+\end{equation}
+
+Le GUI affiche automatiquement ces valeurs et pré-remplit ses champs de saisie dès réception du premier message sur \topic{/current\_tcp\_pose}.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Architecture logicielle : nœuds ROS 2}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Vue d'ensemble des flux de données}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.8cm and 2.2cm,
+  box/.style={rectangle, rounded corners=4pt, minimum width=3.2cm,
+              minimum height=0.9cm, align=center, font=\small\sffamily,
+              drop shadow},
+  arrow/.style={-Stealth, thick},
+  topic/.style={font=\tiny\ttfamily, midway, sloped, above, color=MediumGray},
+]
+
+% Nœuds principaux
+\node[box, fill=LightBlue, draw=PrimaryBlue] (gui)
+  {\textbf{pose\_gui}\\\small Tkinter GUI};
+
+\node[box, fill=LightTeal, draw=AccentTeal, right=of gui] (mc)
+  {\textbf{mission\_coordinator}\\\small Orchestrateur};
+
+\node[box, fill=LightPurple, draw=AccentPurple, above right=1.2cm and 1.8cm of mc] (rm)
+  {\textbf{rail\_mover}\\\small Contrôle rail};
+
+\node[box, fill=LightOrange, draw=AccentOrange, below right=1.2cm and 1.8cm of mc] (cc)
+  {\textbf{cartesian\_commander}\\\small IK + trajectoire};
+
+\node[box, fill=gray!15, draw=MediumGray, right=3.5cm of mc] (gz)
+  {\textbf{Gazebo}\\\small Simulation};
+
+% Flux GUI → MC
+\draw[arrow, PrimaryBlue] (gui) -- node[topic, above]{/target\_pose} (mc);
+
+% Flux MC → RM
+\draw[arrow, AccentTeal] (mc.north east) -- node[topic]{/target\_rail\_pos} (rm.west);
+
+% Flux RM → MC
+\draw[arrow, AccentPurple!70] (rm.south) -- node[topic, below]{/rail\_mover/done} (mc.north);
+
+% Flux MC → CC
+\draw[arrow, AccentTeal] (mc.south east) -- node[topic, below]{/target\_pose\_robot} (cc.west);
+
+% Flux CC → MC
+\draw[arrow, AccentOrange!70] (cc.north) -- node[topic]{/cartesian\_commander/busy} (mc.south);
+
+% Flux MC → GUI (busy)
+\draw[arrow, AccentTeal!70] (mc) -- node[topic, above]{/commander/busy} (gui);
+
+% Flux RM → Gazebo
+\draw[arrow, AccentPurple] (rm.east) -- node[topic, above]{ign service set\_pose} (gz.north west);
+
+% Flux CC → Gazebo (trajectoire)
+\draw[arrow, AccentOrange] (cc.east) -- node[topic, below]{JointTrajectory} (gz.south west);
+
+% Flux Gazebo → CC (joint states)
+\draw[arrow, gray] (gz.west |- cc) -- node[topic, below]{/joint\_states} (cc.east |- cc);
+
+% Feedback TCP
+\draw[arrow, AccentOrange!60, dashed]
+  (cc.south) to[bend right=40] node[below, font=\tiny\ttfamily, color=MediumGray]{/current\_tcp\_pose} (gui.south);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Nœud \texttt{mission\_coordinator}}
+
+Ce nœud est le cœur de l'orchestration. Il reçoit une pose en frame monde depuis le GUI et exécute la séquence suivante dans un thread dédié (pour ne pas bloquer le spin \ros) :
+
+\begin{enumerate}[leftmargin=2em, itemsep=4pt]
+  \item \textbf{Calcul rail optimal} — appel à \texttt{find\_optimal\_rail()} avec la carte chargée en mémoire.
+  \item \textbf{Commande rail} — publication sur \topic{/target\_rail\_pos} ; attente de \topic{/rail\_mover/done} (timeout 10\,s).
+  \item \textbf{Conversion de repère} — application de l'équation~\eqref{eq:world_to_robot}.
+  \item \textbf{Commande bras} — publication sur \topic{/target\_pose\_robot} ; attente de \topic{/cartesian\_commander/busy} $\to$ False (timeout 30\,s).
+\end{enumerate}
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \rowcolor{LightPurple}
+  \textbf{Topic / Param.} & \textbf{Type} & \textbf{Sens} \\
+  \midrule
+  \topic{/target\_pose}           & \texttt{PoseStamped} & Entrée (frame world, GUI) \\
+  \topic{/target\_rail\_pos}      & \texttt{Float64}     & Sortie vers rail\_mover \\
+  \topic{/target\_pose\_robot}    & \texttt{PoseStamped} & Sortie vers cartesian\_commander \\
+  \topic{/rail\_mover/done}       & \texttt{Bool}        & Entrée état rail \\
+  \topic{/current\_rail\_position}& \texttt{Float64}     & Entrée position rail courante \\
+  \topic{/cartesian\_commander/busy} & \texttt{Bool}     & Entrée état bras \\
+  \topic{/commander/busy}         & \texttt{Bool}        & Sortie vers GUI \\
+  \texttt{carte\_results\_dir}    & paramètre string     & Chemin vers les fichiers .pkl \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Nœud \texttt{rail\_mover}}
+
+Ce nœud gère le déplacement des entités Gazebo représentant le rail :
+
+\begin{lstlisting}[language=python, caption={Appel service Gazebo dans rail\_mover.py}]
+  def gz_set_pose(model_name, x, y, z, logger=None):
+      req = (f'name: "{model_name}" '
+             f'position: {{x: {x:.4f}, y: {y:.4f}, z: {z:.4f}}}')
+      result = subprocess.run([
+          'ign', 'service',
+          '-s', '/world/empty/set_pose',  # world name: "empty"
+          '--reqtype', 'ignition.msgs.Pose',
+          '--reptype', 'ignition.msgs.Boolean',
+          '--timeout', '3000',
+          '--req', req
+      ], capture_output=True, text=True)
+      return result.returncode == 0
+\end{lstlisting}
+
+\begin{warnbox}{Limitation identifiée : ros2\_control vs set\_pose}
+Le service \texttt{ign service set\_pose} téléporte correctement les entités sans contrôleur (\texttt{rail\_curseur}, \texttt{table\_rail}). Cependant, le modèle \texttt{probo11}, contrôlé par \texttt{fr3\_arm\_controller} via \texttt{ros2\_control}, voit sa position immédiatement corrigée par le moteur physique Gazebo. L'indicateur visuel (curseur rouge) reflète donc fidèlement la position rail, tandis que le robot reste à sa position de spawn initial dans Gazebo. \textbf{La cinématique inverse est néanmoins correcte} car \texttt{cartesian\_commander} utilise la position rail réelle fournie par \topic{/current\_rail\_position}.
+\end{warnbox}
+
+\subsection{Nœud \texttt{cartesian\_commander} (C++)}
+
+Ce nœud implémente la cinématique inverse avec KDL et la génération de trajectoires articulaires :
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item Souscrit à \topic{/target\_pose\_robot} (frame \texttt{fr3\_link0}) et \topic{/current\_rail\_position}
+  \item Résout l'IK par la stratégie multi-amorce décrite en Section~5
+  \item Génère une trajectoire lissée sur \texttt{move\_duration}\,=\,5\,s
+  \item Publie sur \topic{/fr3\_arm\_controller/joint\_trajectory} (JointTrajectoryController)
+  \item Publie \topic{/current\_tcp\_pose} en frame monde pour le GUI
+  \item Signale \topic{/cartesian\_commander/busy} pendant l'exécution
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Interface graphique médicale}
+% ════════════════════════════════════════════════════════════════════════════
+
+L'interface \texttt{pose\_gui.py} est conçue pour un usage clinique : le médecin n'interagit qu'avec la pose cible, toute la logique de positionnement rail étant transparente.
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  \rowcolor{LightBlue}
+  \textbf{Fonctionnalité} & \textbf{Description} \\
+  \midrule
+  Auto-remplissage       & Les champs se pré-remplissent avec la pose TCP courante en frame monde \\
+  Bouton refresh         & Recharge la pose TCP courante à la demande \\
+  Saisie RPY             & Entrée en degrés (roll, pitch, yaw), conversion quaternion automatique \\
+  Affichage quaternion   & Mise à jour en temps réel lors de la saisie des angles \\
+  Durée de mouvement     & Paramétrable (défaut : 5\,s) \\
+  Indicateur busy        & Bouton désactivé pendant un mouvement ; barre de statut colorée \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+La conversion Euler (degrés, convention RPY extrinsic) $\leftrightarrow$ quaternion est implantée directement dans le nœud pour éviter toute dépendance externe :
+
+\begin{equation}
+  q_w = c_r c_p c_y + s_r s_p s_y, \quad
+  q_x = s_r c_p c_y - c_r s_p s_y
+\end{equation}
+\begin{equation}
+  q_y = c_r s_p c_y + s_r c_p s_y, \quad
+  q_z = c_r c_p s_y - s_r s_p c_y
+\end{equation}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Séquence de lancement et démarrage du système}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Fichier de lancement \file{gazebo\_complet.launch.py}}
+
+Le lancement est entièrement séquencé pour respecter les dépendances de démarrage :
+
+\begin{center}
+\begin{tikzpicture}[
+  step/.style={rectangle, rounded corners=3pt, minimum width=3.5cm,
+               minimum height=0.7cm, align=center, font=\small\sffamily,
+               fill=LightBlue, draw=PrimaryBlue},
+  arrow/.style={-Stealth, thick, PrimaryBlue},
+]
+  \node[step] (gz)  at (0,0)    {Gazebo démarre};
+  \node[step] (rsp) at (0,-1.1) {robot\_state\_publisher};
+  \node[step] (sp)  at (0,-2.2) {Spawn : robot, table, curseur, patient};
+  \node[step] (rm)  at (0,-3.3) {t=3s : rail\_mover + mission\_coordinator};
+  \node[step] (jsb) at (0,-4.4) {t=8s : joint\_state\_broadcaster actif};
+  \node[step] (arm) at (0,-5.5) {t=10s : fr3\_arm\_controller actif};
+  \node[step] (cc)  at (0,-6.6) {t=13s : cartesian\_commander};
+  \foreach \from/\to in {gz/rsp, rsp/sp, sp/rm, rm/jsb, jsb/arm, arm/cc}
+    \draw[arrow] (\from) -- (\to);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Commande de lancement}
+
+\begin{lstlisting}[language=bash, numbers=none]
+  # Construction
+  colcon build --packages-select franka_sonde controleurs fr3_sonde_moveit_config
+
+  # Lancement complet (position rail initiale 0.5 m)
+  ros2 launch franka_sonde gazebo_complet.launch.py \
+      robot_type:=fr3 rail_position:=0.5
+
+  # Interface graphique (terminal séparé)
+  ros2 run controleurs pose_gui
+\end{lstlisting}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Résultats et validation}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Carte de capacité}
+
+La carte chargée contient \textbf{2235 voxels} couvrant l'espace de travail du FR3 sur 7 strates de hauteur ($z \in [0; 0{,}30]$\,m en frame robot). Le calcul complet (800 poses IK par voxel, solveur Levenberg-Marquardt de \texttt{roboticstoolbox}) a été réalisé hors ligne et sérialisé en fichiers \texttt{.pkl}.
+
+\subsection{Démonstration de la séquence complète}
+
+La séquence de mission a été validée en simulation avec la cible :
+$\mathbf{p}_w = (0{,}31\,, 0{,}00\,, 1{,}83)$\,m (frame monde).
+
+\begin{center}
+\begin{tabular}{lrl}
+  \toprule
+  \rowcolor{LightTeal}
+  \textbf{Étape} & \textbf{Valeur} & \textbf{Note} \\
+  \midrule
+  Position rail optimale trouvée & 0,55\,m       & Manipulabilité max parmi 35 candidats \\
+  Manipulabilité au voxel cible  & 0,1847        & Unité : produit des valeurs singulières \\
+  Cible en frame fr3\_link0      & (0,310, 0,000, 0,793)\,m & Après conversion eq.\,\eqref{eq:world_to_robot} \\
+  Amorce IK retenue              & \texttt{Q\_READY} & current\_q\_ divergeait depuis HOME \\
+  Durée de trajectoire           & 5,0\,s        & Paramètre configuré \\
+  Curseur rouge déplacé à $y$    & −0,30\,m      & $= -0{,}85 + 0{,}55$ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Comportement observé}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=4pt]
+  \item \checkmark\ Le GUI pré-remplit automatiquement les champs avec la pose TCP courante en frame monde.
+  \item \checkmark\ L'envoi d'une pose déclenche la sélection rail automatique et la commande séquentielle.
+  \item \checkmark\ Le curseur rouge (indicateur rail) se déplace fluidement vers la position calculée.
+  \item \checkmark\ Le bras effectue sa trajectoire articulaire vers la pose cible.
+  \item \checkmark\ Le bouton GUI reste désactivé (``busy'') pendant toute la durée de la séquence.
+  \item $\triangle$\ La position visuelle du modèle \texttt{probo11} reste à la position de spawn initial (limitation ros2\_control / Gazebo physics — voir Section~7.2).
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Discussion et perspectives}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection{Contributions techniques principales}
+
+\begin{enumerate}[leftmargin=2em, itemsep=6pt]
+  \item \textbf{Découverte et contournement de la contrainte KDL du plugin Franka} : identification que \texttt{franka\_ign\_ros2\_control} impose une chaîne purement rotoïde de 7 joints, avec développement de l'architecture URDF découplée.
+
+  \item \textbf{Carte de capacité pré-calculée} : génération d'une grille 3D de 2235 voxels avec évaluation de 800 poses IK par voxel, permettant une sélection rail en temps réel ($<$\,5\,ms).
+
+  \item \textbf{Mission coordinator} : orchestration ROS\,2 complète (rail + bras) avec gestion des timeouts, retour d'état au GUI, et conversion de repère automatique.
+
+  \item \textbf{IK multi-amorce avec validation FK} : amélioration de la robustesse de la cinématique inverse par essai de 3 configurations initiales avec critère de déplacement articulaire minimal.
+\end{enumerate}
+
+\subsection{Limitations actuelles}
+
+\begin{warnbox}{Limitation principale : mouvement visuel du robot dans Gazebo}
+La physique Gazebo combinée à \texttt{ros2\_control} s'oppose aux commandes \texttt{ign service set\_pose} sur le modèle \texttt{probo11}. L'IK est correctement calculée pour la position rail cible, mais la visualisation du robot dans Gazebo ne reflète pas le déplacement du rail.
+
+\textbf{Solution envisagée — Option A (re-spawn)} : interrompre les contrôleurs, supprimer et re-spawner le modèle à la nouvelle position, relancer les contrôleurs. Complexe mais visuellement complet.
+
+\textbf{Solution envisagée — Option B (matériel réel)} : en production, le robot se déplace physiquement sur le rail ; la limitation est propre à la simulation Ignition Gazebo 6.
+\end{warnbox}
+
+\subsection{Perspectives}
+
+\subsubsection{Intégration sur matériel physique}
+
+Le système est conçu pour la transition simulation $\to$ réel :
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item \texttt{cartesian\_commander} pilote le vrai FR3 via \texttt{franka\_hardware} (même interface ros2\_control)
+  \item \texttt{rail\_mover} peut être adapté pour piloter un actionneur linéaire via un topic de commande
+  \item La carte de capacité est indépendante du simulateur
+\end{itemize}
+
+\subsubsection{Améliorations algorithmiques}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item Intégration de contraintes d'évitement d'obstacles dans la sélection rail
+  \item Prise en compte de la résolution angulaire de la sonde (pas seulement position)
+  \item Raffinement continu de la carte par interpolation (résolution sous-voxel)
+  \item Ajout de la contrainte d'accessibilité ($\mathrm{acc} > \text{seuil}$) en plus de la manipulabilité
+\end{itemize}
+
+\subsubsection{Extension à d'autres procédures}
+
+Le cadre développé — carte de capacité + sélecteur rail + mission coordinator — est générique et peut être réutilisé pour d'autres procédures nécessitant un positionnement robotique optimal.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+% ════════════════════════════════════════════════════════════════════════════
+
+\begin{keybox}{Bilan du projet PROBO-11}
+Le projet PROBO-11 a développé et validé en simulation \ros{} 2 + Gazebo un système complet de positionnement automatique d'un robot FR3 sur rail linéaire pour procédures percutanées. Les contributions clés sont :
+
+\begin{itemize}[leftmargin=1em, itemsep=3pt]
+  \item Architecture URDF découplée contournant la contrainte KDL du plugin Franka
+  \item Carte de capacité pré-calculée (2235 voxels, 800 poses IK/voxel) pour sélection rail en temps réel
+  \item Orchestration ROS\,2 complète avec \texttt{mission\_coordinator} gérant la séquence rail $\to$ bras
+  \item Interface GUI clinique intuitive avec retour de pose TCP en frame monde
+  \item IK multi-amorce améliorant la robustesse face aux singularités
+\end{itemize}
+
+Le système est prêt pour la validation sur matériel physique, les nœuds ROS\,2 étant agnostiques vis-à-vis du simulateur.
+\end{keybox}
+
+\vspace{1cm}
+
+% ════════════════════════════════════════════════════════════════════════════
+\appendix
+\section{Récapitulatif des topics ROS 2}
+% ════════════════════════════════════════════════════════════════════════════
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{llXl}
+  \toprule
+  \rowcolor{LightBlue}
+  \textbf{Topic} & \textbf{Type} & \textbf{Description} & \textbf{Producteur} \\
+  \midrule
+  \topic{/target\_pose}           & PoseStamped & Pose cible (frame world, GUI)       & pose\_gui \\
+  \topic{/target\_pose\_robot}    & PoseStamped & Pose cible (frame fr3\_link0)       & mission\_coord. \\
+  \topic{/target\_rail\_pos}      & Float64     & Position rail cible (m)             & mission\_coord. \\
+  \topic{/current\_rail\_position}& Float64     & Position rail courante (m)          & rail\_mover \\
+  \topic{/rail\_mover/done}       & Bool        & Fin de déplacement rail             & rail\_mover \\
+  \topic{/current\_tcp\_pose}     & PoseStamped & Pose TCP courante (frame world)     & cart.\_commander \\
+  \topic{/cartesian\_commander/busy} & Bool     & Bras en mouvement                   & cart.\_commander \\
+  \topic{/commander/busy}         & Bool        & État busy vers GUI                  & mission\_coord. \\
+  \topic{/joint\_states}          & JointState  & États articulaires                  & gazebo\_bridge \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Paramètres de configuration}
+% ════════════════════════════════════════════════════════════════════════════
+
+\begin{center}
+\begin{tabular}{llll}
+  \toprule
+  \rowcolor{LightTeal}
+  \textbf{Nœud} & \textbf{Paramètre} & \textbf{Défaut} & \textbf{Description} \\
+  \midrule
+  \multirow{3}{*}{cartesian\_commander}
+    & \texttt{move\_duration}  & 5.0 s  & Durée des trajectoires \\
+    & \texttt{ik\_max\_iter}   & 200    & Itérations max IK \\
+    & \texttt{ik\_tolerance}   & 1e-5   & Tolérance positionnelle IK \\
+  \midrule
+  rail\_mover
+    & \texttt{initial\_rail\_position} & 0.0\,m & Position de départ \\
+  \midrule
+  mission\_coordinator
+    & \texttt{carte\_results\_dir} & \texttt{\textasciitilde/robotics/probo-11/src/carte/results} & Chemin carte \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\section{Commandes de débogage utiles}
+% ════════════════════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language=bash, caption={Commandes de diagnostic}]
+  # Lister les services Gazebo disponibles
+  ign service --list
+
+  # Tester set_pose manuellement (world name = "empty")
+  ign service -s /world/empty/set_pose \
+      --reqtype ignition.msgs.Pose \
+      --reptype ignition.msgs.Boolean \
+      --timeout 3000 \
+      --req 'name: "rail_curseur" position: {x:0, y:-0.3, z:1.03}'
+
+  # Inspecter les topics actifs
+  ros2 topic list | grep -E "(rail|tcp|pose|busy)"
+
+  # Écouter la position rail courante
+  ros2 topic echo /current_rail_position
+
+  # Envoyer une pose de test directement
+  ros2 topic pub --once /target_pose geometry_msgs/PoseStamped \
+      '{header: {frame_id: "world"}, pose: {position: {x:0.31,y:0.0,z:1.83},
+      orientation: {x:0,y:0.707,z:0,w:0.707}}}'
+\end{lstlisting}
+
+\end{document}

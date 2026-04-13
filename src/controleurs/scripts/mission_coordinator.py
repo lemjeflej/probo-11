@@ -98,8 +98,13 @@ class MissionCoordinator(Node):
         self.get_logger().info(
             f'Carte chargée : {len(self.voxel_positions_)} voxels.')
 
+        # Seuil de déplacement (m) en dessous duquel le rail n'est PAS ré-optimisé.
+        # Cela évite de bouger le rail quand l'utilisateur change seulement l'orientation.
+        self.POSITION_THRESHOLD = 0.03   # 3 cm
+
         # État interne
         self.current_rail_pos_  = 0.0
+        self.last_target_world_ = None   # dernière cible XYZ ayant déclenché une optimisation rail
         self.rail_done_         = threading.Event()
         self.arm_done_          = threading.Event()
         self.busy_              = False
@@ -161,10 +166,26 @@ class MissionCoordinator(Node):
             f'Mission : cible world ({p.x:.3f}, {p.y:.3f}, {p.z:.3f})')
 
         # ── 1. Rail optimal ─────────────────────────────────────────────────
-        rail_pos, manip = find_optimal_rail(
-            target_world, self.voxel_positions_, self.manip_values_)
-        self.get_logger().info(
-            f'Rail optimal : {rail_pos:.2f} m  (manip={manip:.4f})')
+        # Ne ré-optimiser le rail que si la position a changé significativement.
+        # Si seule l'orientation change, on garde la position rail courante.
+        if self.last_target_world_ is not None:
+            delta = np.linalg.norm(
+                np.array(target_world) - np.array(self.last_target_world_))
+            position_changed = delta > self.POSITION_THRESHOLD
+        else:
+            position_changed = True
+
+        if position_changed:
+            rail_pos, manip = find_optimal_rail(
+                target_world, self.voxel_positions_, self.manip_values_)
+            self.last_target_world_ = target_world
+            self.get_logger().info(
+                f'Rail optimal : {rail_pos:.2f} m  (manip={manip:.4f})')
+        else:
+            rail_pos = self.current_rail_pos_
+            self.get_logger().info(
+                f'Position inchangée (Δ<{self.POSITION_THRESHOLD*100:.0f}cm) '
+                f'— rail maintenu à {rail_pos:.2f} m')
 
         # ── 2. Déplacer le rail ──────────────────────────────────────────────
         self.rail_done_.clear()
