@@ -12,6 +12,10 @@ find_package(std_msgs REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 
+# ignition transport (set_pose direct sans subprocess)
+find_package(ignition-transport11 REQUIRED)
+find_package(ignition-msgs8 REQUIRED)
+
 # ----------------------------------------
 # cartesian_commander  (nœud IK + action)
 # ----------------------------------------
@@ -30,10 +34,24 @@ ament_target_dependencies(cartesian_commander
 target_link_libraries(cartesian_commander orocos-kdl)
 
 # ----------------------------------------
+# rail_mover  (C++ — ignition transport direct)
+# ----------------------------------------
+add_executable(rail_mover src/rail_mover.cpp)
+ament_target_dependencies(rail_mover
+    rclcpp
+    std_msgs
+)
+target_link_libraries(rail_mover
+    ignition-transport11::ignition-transport11
+    ignition-msgs8::ignition-msgs8
+)
+
+# ----------------------------------------
 # Install
 # ----------------------------------------
 install(TARGETS
     cartesian_commander
+    rail_mover
     DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -43,10 +61,7 @@ install(PROGRAMS
 )
 
 # Scripts sans extension .py pour ros2 run / Node(executable=...)
-install(PROGRAMS scripts/rail_mover.py
-    DESTINATION lib/${PROJECT_NAME}
-    RENAME rail_mover
-)
+# rail_mover.py remplacé par le binaire C++ ci-dessus
 install(PROGRAMS scripts/mission_coordinator.py
     DESTINATION lib/${PROJECT_NAME}
     RENAME mission_coordinator

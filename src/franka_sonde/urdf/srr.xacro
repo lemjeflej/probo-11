@@ -67,12 +67,22 @@
   <!-- world_to_arm : Y = 0 ici, le modèle est spawné à y = -0.85 + rail_position
        dans Gazebo. rail_mover déplace le modèle entier en Y lors d'un changement
        de position rail → aucun offset Y hardcodé dans l'URDF. -->
-  <link name="world"/>
-  <joint name="world_to_arm" type="fixed">
+  <link name="robot_base"/>
+  <gazebo reference="robot_base">
+    <kinematic>1</kinematic>
+    <gravity>0</gravity>
+  </gazebo>
+
+  <joint name="base_to_arm" type="fixed">
     <origin xyz="0 0 1.04" rpy="0 0 0"/>
-    <parent link="world"/>
+    <parent link="robot_base"/>
     <child  link="fr3_link0"/>
   </joint>
+
+  <!-- fr3_link0 est fixé à robot_base : même logique, pas de gravité -->
+  <gazebo reference="fr3_link0">
+    <gravity>0</gravity>
+  </gazebo>
 
   <!-- =============================================
        SONDE
