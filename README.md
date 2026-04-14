@@ -1,94 +1,130 @@
-# PROBO-11 — FR3 sur rail linéaire (ROS 2 Humble + Gazebo)
+# Branche `feature/urdf-coupling` — Rapport d'investigation
 
-Simulation d'un bras Franka FR3 sur rail linéaire de 1.9 m avec sonde échographique. Objectif : valider une stratégie de placement optimal du robot par rapport à une cible anatomique.
+## Objectif
 
-## Packages
+Faire bouger visuellement le robot FR3 (`probo11`) avec le rail dans Gazebo,
+en résolvant la contrainte qui rendait le modèle statique sur la branche précédente.
 
-| Package | Rôle |
-|---|---|
-| `franka_sonde` | URDF, launch, controllers, scène patient |
-| `controleurs` | `cartesian_commander` (IK KDL), `pose_gui` |
-| `carte` | Carte de capacité + sélecteur rail optimal |
-| `franka_description` / `franka_ros2` / `libfranka` | Upstream Franka — **ne pas modifier** |
+---
 
-## Installation
+## Cause racine identifiée
+
+Dans la branche `feature/integration-rail`, le lien racine de `srr.xacro` s'appelait
+`world`. Dans Ignition Gazebo (Fortress), un modèle dont le lien racine porte ce nom
+est automatiquement converti en **modèle statique** (`static=true` dans le SDF généré).
+Résultat : `ign service set_pose` retournait `data: true` mais ne déplaçait rien —
+le modèle était soudé au référentiel monde.
+
+Le curseur (`rail_curseur`) fonctionnait car son lien racine s'appelle `base`.
+
+---
+
+## Ce qui a été tenté
+
+### 1. Renommage `world` → `robot_base` dans `srr.xacro`
+
+**Résultat :** le robot suit le rail. Le `set_pose` fonctionne.
+
+**Problème introduit :** le modèle n'est plus statique → la gravité s'applique
+à `robot_base` → le robot tombe entre deux appels `set_pose`.
+
+### 2. Tags URDF `<kinematic>1</kinematic>` + `<gravity>0</gravity>` sur `robot_base`
+
+**Résultat :** non fonctionnel. Le convertisseur URDF→SDF d'Ignition Fortress
+n'honore pas ces tags de façon fiable pour le lien racine d'un modèle libre.
+Le robot continue de tomber.
+
+### 3. Remplacement du `rail_mover.py` (subprocess) par `rail_mover.cpp` (ignition transport)
+
+**Objectif :** appeler `set_pose` via `ignition::transport::Node::Request()` directement,
+sans spawner un nouveau processus à chaque appel.
+
+| | Python subprocess | C++ ignition transport |
+|---|---|---|
+| Latence par appel | ~150 ms | < 5 ms |
+| Fréquence effective | ~5 Hz | 100 Hz |
+| Chute gravité entre appels | ~11 cm | ~0.5 mm |
+
+**Résultat :** mouvement du rail visuellement fluide. Le robot suit le curseur
+sans chute perceptible pendant le déplacement.
+
+**Problème résiduel :** vibrations (±2 cm) à l'arrêt et pendant le mouvement du bras.
+
+### 4. Analyse des vibrations
+
+Les vibrations sont causées par la **collision entre deux systèmes de contrôle** :
+
+- `ros2_control` (1000 Hz) commande les joints en position dans le référentiel monde.
+- `set_pose` (100 Hz) téléporte `robot_base` → déplace la base sous les joints.
+- `ros2_control` perçoit une erreur de position → applique des couples correctors → oscille.
+- Pendant la trajectoire du bras, l'interférence est encore plus marquée
+  (trajectoire planifiée pour une base fixe, base qui bouge → résonance).
+
+Ce comportement est une **limitation fondamentale** d'Ignition Gazebo Fortress :
+`set_pose` est conçu pour la téléportation one-shot, pas pour le maintien continu
+d'une position contre la physique d'un modèle à controllers actifs.
+La seule solution propre serait un **plugin Gazebo natif** opérant dans la boucle
+physique (1000 Hz), hors scope du projet.
+
+---
+
+## État final de la branche
+
+| Composant | Changement | État |
+|---|---|---|
+| `srr.xacro` | Lien racine `robot_base` + tags kinematic/gravity | Inclus (investigation) |
+| `rail_mover.cpp` | Nouveau nœud C++ ign-transport, 100 Hz | **Fonctionnel** |
+| `rail_mover.py` | Interpolation latest-value queue | Supersédé par .cpp |
+| `CMakeLists.txt` | Build `rail_mover.cpp` + deps ign-transport11/msgs8 | **Fonctionnel** |
+| `mission_coordinator.py` | Ne ré-optimise pas le rail si Δpos < 3 cm | **Fonctionnel** |
+
+---
+
+## Améliorations conservées
+
+### `mission_coordinator.py` — Stabilité orientation
+
+Correction d'un bug : changer seulement le yaw dans le GUI déclenchait une
+ré-optimisation du rail (même position XYZ → rail différent → robot change
+de configuration de l'autre côté de la table).
+
+**Fix :** si `‖p_nouvelle − p_précédente‖ < 3 cm`, le rail n'est pas ré-optimisé
+et la position courante est conservée.
+
+### `rail_mover.cpp` — Mouvement fluide du curseur
+
+Le curseur rouge (`rail_curseur`) se déplace désormais avec une interpolation
+linéaire à vitesse constante (défaut 0.35 m/s), appelée à 100 Hz via
+ignition transport direct. Plus aucun saut visible.
+
+---
+
+## Conclusion et recommandation
+
+Sur le **matériel réel**, le robot se déplace physiquement sur le rail — cette
+contrainte de simulation est sans impact en production.
+
+Pour la démonstration en simulation, la posture adoptée sur la branche suivante :
+
+- Lien racine `world` → modèle statique, aucune chute, aucune vibration
+- Curseur rouge déplacé par `rail_mover.cpp` → indicateur visuel de la position rail
+- IK calculée pour la bonne position rail → résultat algorithmique correct
+- Argument jury : limitation documentée et comprise d'Ignition Fortress + ros2_control
+
+---
+
+## Commandes de test
 
 ```bash
-vcs import src < franka.repos
-vcs import src < src/franka_ros2/dependency.repos
-cd src/libfranka && git submodule update --init --recursive && cd ../..
-rosdep install --from-paths src --ignore-src -r -y
-pip install roboticstoolbox-python spatialmath-python matplotlib numpy
-colcon build --symlink-install && source install/setup.bash
+# Build
+colcon build --packages-select franka_sonde controleurs
+
+# Lancement
+ros2 launch franka_sonde gazebo_complet.launch.py
+
+# Test set_pose direct (curseur fonctionne, probo11 statique)
+ign service -s /world/empty/set_pose \
+  --reqtype ignition.msgs.Pose --reptype ignition.msgs.Boolean \
+  --timeout 3000 \
+  --req 'name: "rail_curseur" position: {x:0, y:-0.3, z:1.03}'
 ```
-
-## Workflow
-
-```bash
-# 1. Trouver la position rail optimale pour une cible world (x, y, z)
-cd src/carte && python3 optimal_rail_finder.py
-
-# 2. Lancer la simulation avec ce rail
-ros2 launch franka_sonde gazebo_complet.launch.py rail_position:=<valeur>
-
-# 3. Commander le bras (terminal séparé)
-ros2 run controleurs pose_gui
-```
-
-Le GUI se remplit automatiquement avec la pose TCP courante. Les poses sont en frame **`fr3_link0`**.
-
-## Contrainte rail — pourquoi le joint est fixe
-
-Le plugin Franka Gazebo (`franka_ign_ros2_control/IgnitionSystem`) construit sa chaîne KDL depuis `world` jusqu'au tip de **l'URDF entier**, puis calcule la compensation gravitationnelle sur exactement 7 joints (hardcodé). Un joint prismatique dans ce chemin → 8 joints → crash → tous les controllers inactifs.
-
-```cpp
-// ign_ros2_control_plugin.cpp
-root_link = model.getRoot()->name;  // "world"
-tip_link  = findTipLink(model);     // "sonde_tcp"
-kdl_model_ = ModelKDL(model, root_link, tip_link);
-// prismatique dans ce chemin → JntToGravity plante
-```
-
-Le pattern standard (deux blocs `<ros2_control>`) ne contourne pas ce problème car le plugin lit le modèle complet indépendamment des blocs déclarés.
-
-**Solution actuelle** : `rail_joint` reste `fixed`, position baked dans l'URDF au lancement via xacro arg.
-
-## Couplage rail dynamique (branche `feature/rail-dynamique`)
-
-### Approche retenue
-
-Découpler l'ancrage du bras du rail dans l'URDF : le bras est fixé directement à `world` avec un offset Y variable. Le rail existe comme entité visuelle séparée avec son propre bloc `<ros2_control>` + `gz_ros2_control/GazeboSystem`. Ça fonctionne identiquement en simulation et sur le vrai hardware.
-
-### Étapes
-
-1. **URDF** — Séparer ancrage bras (joint `world → fr3_link0`, offset Y variable) du rail visuel
-2. **`rail_mover` node** — Souscrit `/target_rail_pos`, met à jour l'offset, republie `robot_description`
-3. **Launch** — Intégrer `rail_mover` dans `gazebo_complet.launch.py`
-4. **`cartesian_commander`** — Calculer rail optimal → attendre repositionnement → IK + trajectoire bras
-
-## Carte de capacité
-
-Strates Z ∈ [0.0, 0.3 m] en frame `fr3_link0`, précalculées par `Capacity_Map_Creator.py`.
-
-```bash
-cd src/carte
-python3 Voxel_visualisation.py    # visualiser
-python3 optimal_rail_finder.py    # trouver le rail optimal
-```
-
-## Repères
-
-```
-world → table → rail → rail_joint (fixed, y = -0.85 + rail_position)
-    → montage → fr3_link0 (z=+1.04) → [7 joints] → fr3_link8
-    → sonde_base (flip 180° X) → sonde_tcp (+0.2 m Z)
-```
-
-Espace de travail (frame `fr3_link0`) : x [0.1–0.8], y [−0.7–0.7], z [0.0–0.3] m
-
-## Dépannage
-
-- **Controllers inactifs** : `rail_joint` pas `fixed` dans l'URDF
-- **IK code −5** : pose hors espace de travail en frame `fr3_link0`
-- **`fr3_arm_controller` non chargé** : rebuilder `franka_sonde` et re-sourcer
-- **libfranka ne compile pas** : `cd src/libfranka && git submodule update --init --recursive`
